@@ -1622,9 +1622,9 @@ def show_dark_dataframe(df, width="stretch", height="content"):
                 {"selector": "tbody tr:hover td", "props": [("background-color", "#1a2c42")]},
             ])
         )
-        st.dataframe(styled, use_container_width=use_container_width, height=height)
+        st.dataframe(styled, width=width, height=height)
     except Exception:
-        st.dataframe(df, use_container_width=use_container_width, height=height)
+        st.dataframe(df, width=width, height=height)
 
 PLOTLY_COLORWAY = ["#9ecaff", "#2196f3", "#ffb77b", "#ffb4ab", "#78dba9", "#c8c6c5", "#89919d"]
 
