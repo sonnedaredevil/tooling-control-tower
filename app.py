@@ -3100,20 +3100,21 @@ for slug, icon, label in PAGE_CONFIG:
         f'</a>'
     )
 
-st.markdown(
-    f"""
-    <nav class="custom-left-nav">
-        <div class="custom-nav-brand">
-            {f'<img class="custom-nav-logo" src="{logo_uri}" alt="Lianbo logo">' if logo_uri else ''}
-            <div class="custom-nav-brand-title">Tooling Control</div>
-            <div class="custom-nav-brand-subtitle">Sistem upravljanja alatnicom</div>
-        </div>
-        <div class="custom-nav-list">{''.join(nav_items)}</div>
-        <div class="custom-nav-footer">● Sistem povezan<br>Režim: alatnica</div>
-    </nav>
-    """,
-    unsafe_allow_html=True,
+# HTML mora početi bez uvlačenja. U novijim Streamlit/Markdown verzijama
+# uvučeni blok unutar <nav> elementa može da se prikaže kao sirov tekst.
+nav_logo_html = f'<img class="custom-nav-logo" src="{logo_uri}" alt="Lianbo logo">' if logo_uri else ""
+nav_html = (
+    '<nav class="custom-left-nav">'
+    '<div class="custom-nav-brand">'
+    f'{nav_logo_html}'
+    '<div class="custom-nav-brand-title">Tooling Control</div>'
+    '<div class="custom-nav-brand-subtitle">Sistem upravljanja alatnicom</div>'
+    '</div>'
+    f'<div class="custom-nav-list">{"".join(nav_items)}</div>'
+    '<div class="custom-nav-footer">● Sistem povezan<br>Režim: alatnica</div>'
+    '</nav>'
 )
+st.markdown(nav_html, unsafe_allow_html=True)
 
 meseci_default = sheetovi[-3:] if len(sheetovi) >= 3 else sheetovi
 lista_alata = sorted(set(udarci.get("ALAT", pd.Series(dtype=str)).dropna().astype(str).unique()).union(
