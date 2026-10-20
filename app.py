@@ -5,7 +5,7 @@ import re
 import unicodedata
 import time
 from io import BytesIO
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from pathlib import Path
 
 import pandas as pd
@@ -3090,31 +3090,73 @@ if requested_page not in PAGE_LABEL_BY_SLUG:
     requested_page = "tv-panel"
 selected_page = PAGE_LABEL_BY_SLUG[requested_page]
 
-nav_items = []
-for slug, icon, label in PAGE_CONFIG:
-    active = " active" if slug == requested_page else ""
-    nav_items.append(
-        f'<a class="custom-nav-item{active}" href="?page={slug}" target="_self">'
-        f'<span class="custom-nav-icon">{icon}</span>'
-        f'<span class="custom-nav-label">{html.escape(label)}</span>'
-        f'</a>'
-    )
+# ---------- Trajni filteri preko URL-a ----------
+# Klik na link u levom meniju ponovo učitava stranicu i briše session_state,
+# zato se filteri prenose kroz query parametre i ovde vraćaju u session_state.
+def _qp_get(key, default=""):
+    v = st.query_params.get(key, default)
+    if isinstance(v, list):
+        v = v[0] if v else default
+    return str(v)
 
-# HTML mora početi bez uvlačenja. U novijim Streamlit/Markdown verzijama
-# uvučeni blok unutar <nav> elementa može da se prikaže kao sirov tekst.
-nav_logo_html = f'<img class="custom-nav-logo" src="{logo_uri}" alt="Lianbo logo">' if logo_uri else ""
-nav_html = (
-    '<nav class="custom-left-nav">'
-    '<div class="custom-nav-brand">'
-    f'{nav_logo_html}'
-    '<div class="custom-nav-brand-title">Tooling Control</div>'
-    '<div class="custom-nav-brand-subtitle">Sistem upravljanja alatnicom</div>'
-    '</div>'
-    f'<div class="custom-nav-list">{"".join(nav_items)}</div>'
-    '<div class="custom-nav-footer">● Sistem povezan<br>Režim: alatnica</div>'
-    '</nav>'
-)
-st.markdown(nav_html, unsafe_allow_html=True)
+
+def _restore_filters_from_url(sheetovi_list, min_d, max_d):
+    am = _qp_get("am")
+    if am == "1":
+        st.session_state["filter_all_months"] = True
+    elif am == "0":
+        st.session_state["filter_all_months"] = False
+        meseci_url = [m for m in _qp_get("m").split("~") if m in sheetovi_list]
+        if meseci_url:
+            st.session_state["filter_months"] = meseci_url
+    at = _qp_get("at")
+    if at == "1":
+        st.session_state["filter_all_tools"] = True
+    elif at == "0":
+        st.session_state["filter_all_tools"] = False
+        alati_url = [a for a in _qp_get("t").split("~") if a]
+        if alati_url:
+            st.session_state["filter_tools"] = alati_url
+    d0, d1 = _qp_get("d0"), _qp_get("d1")
+    if d0 and d1 and min_d is not None and max_d is not None:
+        try:
+            a = pd.to_datetime(d0).date()
+            b = pd.to_datetime(d1).date()
+            a = min(max(a, min_d), max_d)
+            b = min(max(b, min_d), max_d)
+            st.session_state["filter_date_range"] = (a, b)
+        except Exception:
+            pass
+
+
+def _filter_query_string() -> str:
+    """Pravi query string sa trenutnim filterima, da prežive promenu modula."""
+    ss = st.session_state
+    params = {}
+    if ss.get("filter_all_months", False):
+        params["am"] = "1"
+    else:
+        params["am"] = "0"
+        m = ss.get("filter_months", [])
+        if m:
+            params["m"] = "~".join(str(x) for x in m)
+    if ss.get("filter_all_tools", True):
+        params["at"] = "1"
+    else:
+        params["at"] = "0"
+        t = ss.get("filter_tools", [])
+        if t:
+            params["t"] = "~".join(str(x) for x in t)
+    rng = ss.get("filter_date_range")
+    if isinstance(rng, (tuple, list)) and len(rng) == 2:
+        try:
+            params["d0"] = pd.to_datetime(rng[0]).strftime("%Y-%m-%d")
+            params["d1"] = pd.to_datetime(rng[1]).strftime("%Y-%m-%d")
+        except Exception:
+            pass
+    return urlencode(params)
+
+
 
 meseci_default = sheetovi[-3:] if len(sheetovi) >= 3 else sheetovi
 lista_alata = sorted(set(udarci.get("ALAT", pd.Series(dtype=str)).dropna().astype(str).unique()).union(
@@ -3129,6 +3171,17 @@ if "DATUM" in kvarovi.columns and kvarovi["DATUM"].notna().any():
 else:
     min_date = None
     max_date = None
+
+# Podrazumevane vrednosti filtera i vraćanje filtera iz URL-a (jednom po sesiji).
+st.session_state.setdefault("filter_all_months", False)
+st.session_state.setdefault("filter_months", list(meseci_default))
+st.session_state.setdefault("filter_all_tools", True)
+st.session_state.setdefault("filter_tools", [])
+if min_date is not None and max_date is not None:
+    st.session_state.setdefault("filter_date_range", (min_date, max_date))
+if not st.session_state.get("filters_restored"):
+    st.session_state["filters_restored"] = True
+    _restore_filters_from_url(sheetovi, min_date, max_date)
 
 # Kompaktni filteri u jednoj liniji. Svaki filter se otvara u svom padajućem
 # panelu i nakon izbora može odmah da se zatvori klikom van panela.
@@ -3152,11 +3205,10 @@ filter_month_col, filter_tool_col, filter_date_col, refresh_col = st.columns([1.
 with filter_month_col:
     with st.popover(f"▦ {meseci_label}", width="stretch"):
         st.markdown("##### Meseci udaraca")
-        svi_meseci = st.checkbox("Svi meseci", value=svi_meseci, key="filter_all_months")
+        svi_meseci = st.checkbox("Svi meseci", key="filter_all_months")
         meseci_selection = st.multiselect(
             "Izaberi mesece",
             sheetovi,
-            default=[] if svi_meseci else [m for m in meseci_selection if m in sheetovi],
             disabled=svi_meseci,
             key="filter_months",
             placeholder="Izaberi jedan ili više meseci",
@@ -3166,11 +3218,10 @@ with filter_month_col:
 with filter_tool_col:
     with st.popover(f"⌁ {alati_label}", width="stretch"):
         st.markdown("##### Alati")
-        svi_alati = st.checkbox("Svi alati", value=svi_alati, key="filter_all_tools")
+        svi_alati = st.checkbox("Svi alati", key="filter_all_tools")
         alati_selection = st.multiselect(
             "Izaberi alate",
             lista_alata,
-            default=[] if svi_alati else [a for a in alati_selection if a in lista_alata],
             disabled=svi_alati,
             key="filter_tools",
             placeholder="Izaberi jedan ili više alata",
@@ -3183,7 +3234,6 @@ with filter_date_col:
         if min_date is not None and max_date is not None:
             period = st.date_input(
                 "Izaberi početni i krajnji datum",
-                value=period if period else (min_date, max_date),
                 min_value=min_date,
                 max_value=max_date,
                 key="filter_date_range",
@@ -3201,6 +3251,36 @@ with refresh_col:
 
 izabrani_meseci = sheetovi if svi_meseci else (meseci_selection or meseci_default)
 izabrani_alati = lista_alata if svi_alati else alati_selection
+
+_fq = _filter_query_string()
+
+nav_items = []
+for slug, icon, label in PAGE_CONFIG:
+    active = " active" if slug == requested_page else ""
+    href = f"?page={slug}" + (f"&{_fq}" if _fq else "")
+    nav_items.append(
+        f'<a class="custom-nav-item{active}" href="{html.escape(href)}" target="_self">'
+        f'<span class="custom-nav-icon">{icon}</span>'
+        f'<span class="custom-nav-label">{html.escape(label)}</span>'
+        f'</a>'
+    )
+
+# HTML mora početi bez uvlačenja. U novijim Streamlit/Markdown verzijama
+# uvučeni blok unutar <nav> elementa može da se prikaže kao sirov tekst.
+nav_logo_html = f'<img class="custom-nav-logo" src="{logo_uri}" alt="Lianbo logo">' if logo_uri else ""
+nav_html = (
+    '<nav class="custom-left-nav">'
+    '<div class="custom-nav-brand">'
+    f'{nav_logo_html}'
+    '<div class="custom-nav-brand-title">Tooling Control</div>'
+    '<div class="custom-nav-brand-subtitle">Sistem upravljanja alatnicom</div>'
+    '</div>'
+    f'<div class="custom-nav-list">{"".join(nav_items)}</div>'
+    '<div class="custom-nav-footer">● Sistem povezan<br>Režim: alatnica</div>'
+    '</nav>'
+)
+st.markdown(nav_html, unsafe_allow_html=True)
+
 
 if period and isinstance(period, (tuple, list)) and len(period) == 2:
     period_txt = f"{pd.to_datetime(period[0]).strftime('%d.%m.%Y')} – {pd.to_datetime(period[1]).strftime('%d.%m.%Y')}"
