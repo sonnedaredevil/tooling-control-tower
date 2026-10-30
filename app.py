@@ -401,12 +401,13 @@ def set_background(image_file: str):
         .stTabs [data-baseweb="tab-panel"]:nth-of-type(10) {{ background: radial-gradient(circle at 0% 0%, rgba(56,189,248,0.055), transparent 55%); }}
         .stTabs [data-baseweb="tab-panel"]:nth-of-type(11) {{ background: radial-gradient(circle at 0% 0%, rgba(148,163,184,0.05), transparent 55%); }}
 
-        /* Alarm indikator u zaglavlju (trougao sa uzvičnikom) */
-        [data-testid="stPopover"] > button {{
+        /* Alarm indikator – samo ⚠ u zaglavlju, ne filter popoveri */
+        #header-alert-row + div[data-testid="stHorizontalBlock"] > div:nth-child(2) [data-testid="stPopover"] > button,
+        #header-alert-row + div[data-testid="stHorizontalBlock"] > div:nth-child(3) [data-testid="stPopover"] > button {{
             position: relative;
-            width: 54px;
-            height: 54px;
-            min-width: 54px;
+            width: 54px !important;
+            height: 54px !important;
+            min-width: 54px !important;
             padding: 0 !important;
             display: flex;
             align-items: center;
@@ -417,12 +418,17 @@ def set_background(image_file: str):
             border: 1px solid rgba(245,185,66,0.45) !important;
             border-radius: 12px !important;
             box-shadow: 0 6px 18px rgba(0,0,0,0.30);
+            color: #f5b942 !important;
         }}
-        [data-testid="stPopover"] > button:hover {{
+        #header-alert-row + div[data-testid="stHorizontalBlock"] > div:nth-child(2) [data-testid="stPopover"] > button:hover,
+        #header-alert-row + div[data-testid="stHorizontalBlock"] > div:nth-child(3) [data-testid="stPopover"] > button:hover {{
             border-color: rgba(245,185,66,0.75) !important;
             box-shadow: 0 0 0 3px rgba(245,185,66,0.16), 0 6px 18px rgba(0,0,0,0.30);
         }}
-        [data-testid="stPopover"] > button p {{ font-size: 24px !important; margin: 0 !important; }}
+        #header-alert-row + div[data-testid="stHorizontalBlock"] > div:nth-child(2) [data-testid="stPopover"] > button p,
+        #header-alert-row + div[data-testid="stHorizontalBlock"] > div:nth-child(3) [data-testid="stPopover"] > button p {{
+            font-size: 24px !important; margin: 0 !important; color: #f5b942 !important;
+        }}
 
 
         .stButton > button, .stDownloadButton > button, .stLinkButton > a {{
@@ -1302,12 +1308,25 @@ def set_background(image_file: str):
         [data-testid="stPopover"] > button {{
             height:42px !important; min-height:42px !important; width:100% !important;
             justify-content:flex-start !important; padding:0 13px !important;
-            border-radius:3px !important; background:#181c22 !important;
-            border:1px solid #404752 !important; box-shadow:none !important;
-            font:600 10px/42px 'JetBrains Mono',monospace !important;
-            color:#dbe6f5 !important; white-space:nowrap !important; overflow:hidden !important;
+            border-radius:8px !important; background:#161d2a !important; background-color:#161d2a !important;
+            border:1px solid rgba(126,170,224,0.32) !important; box-shadow:0 4px 12px rgba(0,0,0,.25) !important;
+            font:600 12px/42px 'JetBrains Mono',monospace !important;
+            color:#e8f0ff !important; -webkit-text-fill-color:#e8f0ff !important;
+            white-space:nowrap !important; overflow:hidden !important;
         }}
-        [data-testid="stPopover"] > button:hover {{ border-color:#78a9ff !important; background:#1e242c !important; }}
+        [data-testid="stPopover"] > button p,
+        [data-testid="stPopover"] > button span {{
+            color:#e8f0ff !important; -webkit-text-fill-color:#e8f0ff !important;
+        }}
+        [data-testid="stPopover"] > button:hover {{
+            border-color:rgba(41,211,200,0.55) !important; background:#1e2a3d !important;
+            color:#67e8f9 !important;
+        }}
+        .stButton > button {{
+            background:#161d2a !important; background-color:#161d2a !important;
+            color:#e8f0ff !important; -webkit-text-fill-color:#e8f0ff !important;
+            border:1px solid rgba(126,170,224,0.32) !important;
+        }}
         [data-testid="stPopoverBody"] {{ min-width:360px !important; max-width:min(520px,92vw) !important; }}
 
         /* Sažetak aktivnih filtera - mora biti globalan. */
@@ -1879,24 +1898,50 @@ st.markdown(
     html body .stDateInput input,
     html body .stDateInput [data-baseweb="input"],
     html body [data-testid="stPopover"] > button,
-    html body [data-testid="stPopover"] > button p {
-        background: #000000 !important;
-        background-color: #000000 !important;
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        border-color: #ffd84d !important;
+    html body [data-testid="stPopover"] button,
+    html body [data-testid="stPopover"] > button p,
+    html body [data-testid="stPopover"] > button span,
+    html body .stButton > button,
+    html body .stButton > button p,
+    html body button[kind="secondary"],
+    html body button[data-testid="baseButton-secondary"],
+    html body button[data-testid="baseButton-secondaryFormSubmit"] {
+        background: #161d2a !important;
+        background-color: #161d2a !important;
+        background-image: none !important;
+        color: #e8f0ff !important;
+        -webkit-text-fill-color: #e8f0ff !important;
+        border: 1px solid rgba(126, 170, 224, 0.35) !important;
+        border-color: rgba(126, 170, 224, 0.35) !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.28) !important;
+        opacity: 1 !important;
     }
-    html body [data-baseweb="select"] > div { border: 1px solid #ffd84d !important; }
+    html body [data-baseweb="select"] > div { border: 1px solid rgba(126, 170, 224, 0.35) !important; }
     html body [data-baseweb="select"] span,
     html body [data-baseweb="select"] div[value],
     html body [data-baseweb="select"] [class*="singleValue"] {
-        color: #ffd84d !important;
-        -webkit-text-fill-color: #ffd84d !important;
+        color: #e8f0ff !important;
+        -webkit-text-fill-color: #e8f0ff !important;
         background: transparent !important;
     }
     html body [data-baseweb="select"] svg,
-    html body [data-testid="stPopover"] > button svg { fill: #ffd84d !important; color: #ffd84d !important; }
-    html body [data-testid="stPopover"] > button:hover { border-color: #ffffff !important; background: #111111 !important; }
+    html body [data-testid="stPopover"] > button svg { fill: #67e8f9 !important; color: #67e8f9 !important; }
+    html body [data-testid="stPopover"] > button:hover,
+    html body [data-testid="stPopover"] button:hover,
+    html body .stButton > button:hover,
+    html body button[kind="secondary"]:hover,
+    html body button[data-testid="baseButton-secondary"]:hover {
+        border-color: rgba(41, 211, 200, 0.55) !important;
+        background: #1e2a3d !important;
+        background-color: #1e2a3d !important;
+        color: #67e8f9 !important;
+        -webkit-text-fill-color: #67e8f9 !important;
+    }
+    html body [data-testid="stPopover"] > button:hover p,
+    html body .stButton > button:hover p {
+        color: #67e8f9 !important;
+        -webkit-text-fill-color: #67e8f9 !important;
+    }
     html body input::placeholder, html body textarea::placeholder { color: #cfcfcf !important; opacity: 1 !important; }
 
     /* ---- Čipovi izabranih stavki (multiselect) ---- */
@@ -2032,6 +2077,64 @@ st.markdown(
     html body .stButton > button p { color: #ffffff !important; }
     html body .stButton > button:hover { background: #1a1a1a !important; border-color: #ffffff !important; color: #ffd84d !important; }
     html body .stButton > button:hover p { color: #ffd84d !important; }
+
+
+    /* ---- FORCE dark selectbox (Zameni alat / Cavity) – Streamlit često drži belu ---- */
+    html body div[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+    html body div[data-testid="stSelectbox"] [data-baseweb="select"] > div > div,
+    html body div[data-testid="stSelectbox"] [data-baseweb="select"] > div > div > div,
+    html body div[data-testid="stSelectbox"] > div > div,
+    html body div[data-testid="stSelectbox"] div[class*="st-"],
+    html body [data-baseweb="select"] > div[aria-haspopup],
+    html body [data-baseweb="select"] > div[aria-haspopup] > div,
+    html body [data-baseweb="select"] div[class*="valueContainer"],
+    html body [data-baseweb="select"] div[class*="control"],
+    html body [data-baseweb="select"] div[class*="indicatorsContainer"],
+    html body [data-baseweb="select"] div[class*="Input"] {
+        background: #161d2a !important;
+        background-color: #161d2a !important;
+        background-image: none !important;
+        color: #e8f0ff !important;
+        -webkit-text-fill-color: #e8f0ff !important;
+        border-color: rgba(126, 170, 224, 0.35) !important;
+        box-shadow: none !important;
+    }
+    html body div[data-testid="stSelectbox"] [data-baseweb="select"] > div {
+        border: 1px solid rgba(126, 170, 224, 0.35) !important;
+        border-radius: 8px !important;
+        min-height: 40px !important;
+    }
+    html body div[data-testid="stSelectbox"] span,
+    html body div[data-testid="stSelectbox"] p,
+    html body div[data-testid="stSelectbox"] div,
+    html body div[data-testid="stSelectbox"] input {
+        color: #e8f0ff !important;
+        -webkit-text-fill-color: #e8f0ff !important;
+        background-color: transparent !important;
+    }
+    /* inner white layer that BaseWeb injects */
+    html body [data-baseweb="select"] * {
+        border-color: rgba(126, 170, 224, 0.25) !important;
+    }
+    html body [data-baseweb="select"] > div {
+        background: #161d2a !important;
+        background-color: #161d2a !important;
+    }
+    /* dropdown lista kad se otvori */
+    html body ul[role="listbox"],
+    html body ul[role="listbox"] li,
+    html body li[role="option"],
+    html body [data-baseweb="menu"],
+    html body [data-baseweb="popover"] [data-baseweb="menu"] {
+        background: #121820 !important;
+        background-color: #121820 !important;
+        color: #e8f0ff !important;
+    }
+    html body li[role="option"]:hover,
+    html body li[role="option"][aria-selected="true"] {
+        background: #1e2a3d !important;
+        color: #67e8f9 !important;
+    }
 
     /* ---- Kartica mašine: status preventive odvojen od naziva ---- */
     .lok-head { display: flex !important; align-items: center !important; justify-content: flex-start !important; gap: 14px !important; flex-wrap: wrap; }
@@ -4524,14 +4627,71 @@ def mesec_iz_datuma(datum):
 # SADRŽAJ IZABRANOG MODULA
 # =========================================================
 if requested_page == 'tv-panel':
-    c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+    # Availability = (opening time − zastoj) / opening time × 100
+    # Opening time = radni dani × broj smena × 410 min (isti izvor kao MTBF modul)
+    _, _tv_opening_min = izracunaj_operating_minute(udarci_dnevno, period, izabrani_alati)
+    if _tv_opening_min > 0:
+        _tv_avail = max(0.0, min(100.0, (_tv_opening_min - float(ukupno_zastoj)) / _tv_opening_min * 100.0))
+        _tv_avail_note = f"Opening {_tv_opening_min/60:,.0f} h − zastoj {ukupno_zastoj/60:,.1f} h"
+    else:
+        _tv_avail = 0.0
+        _tv_avail_note = "Nema opening time za period"
+
+    c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(8)
     with c1: kpi_card("Ukupno kvarova", f"{ukupno_kvarova}", "Izabrani period")
     with c2: kpi_card("Ukupno zastoja", f"{ukupno_zastoj:.0f} min", f"{ukupno_zastoj/60:.1f} h")
     with c3: kpi_card("MTTR", f"{mttr_ukupno:.1f} min", "Prosek intervencije")
     with c4: kpi_card("Udarci", f"{ukupno_udaraca:,}", "Izabrani meseci")
-    with c5: kpi_card("Kritični alati", f"{kriticni_broj}", "Kvarovi / 1M ≥ 3")
-    with c6: kpi_card("Delovi bez stanja", f"{len(delovi_zero)}", "Stanje ≤ 0")
-    with c7: kpi_card("Preventiva", f"{preventiva_za_broj + preventiva_blizu_broj}", "Za / blizu")
+    with c5: kpi_card("Availability", f"{_tv_avail:.1f} %", _tv_avail_note)
+    with c6: kpi_card("Kritični alati", f"{kriticni_broj}", "Kvarovi / 1M ≥ 3")
+    with c7: kpi_card("Delovi bez stanja", f"{len(delovi_zero)}", "Stanje ≤ 0")
+    with c8: kpi_card("Preventiva", f"{preventiva_za_broj + preventiva_blizu_broj}", "Za / blizu")
+
+    # Availability vs target (93%)
+    AVAIL_TARGET = 93.0
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.subheader("Availability vs target")
+    st.caption(
+        "Availability = (opening time − zastoj) / opening time × 100. "
+        f"Target = {AVAIL_TARGET:.0f} %. Zeleno = na ili iznad targeta, narandžasto = ispod, plavo = target."
+    )
+    _av_zelena, _av_narandza, _av_plava = "#3dff9a", "#ffb020", "#00e5ff"
+    _av_boja = _av_zelena if _tv_avail >= AVAIL_TARGET else _av_narandza
+    _av_delta = _tv_avail - AVAIL_TARGET
+    _av_delta_txt = f"{_av_delta:+.1f} p.p. u odnosu na target"
+    fig_avail = go.Figure()
+    fig_avail.add_bar(
+        x=["Realno", "Target"],
+        y=[_tv_avail, AVAIL_TARGET],
+        marker_color=[_av_boja, _av_plava],
+        text=[f"{_tv_avail:.1f} %", f"{AVAIL_TARGET:.0f} %"],
+        textposition="outside",
+        textfont=dict(size=14, color="#f4f8fd"),
+        hovertemplate="%{x}: %{y:.1f} %<extra></extra>",
+        width=0.45,
+    )
+    fig_avail.add_hline(
+        y=AVAIL_TARGET,
+        line_dash="dash",
+        line_color="rgba(0, 229, 255, 0.55)",
+        annotation_text=f"Target {AVAIL_TARGET:.0f} %",
+        annotation_position="top right",
+        annotation_font=dict(color="#67e8f9", size=11),
+    )
+    fig_avail.update_layout(
+        title=f"Availability: {_tv_avail:.1f} %  ({_av_delta_txt})",
+        yaxis=dict(title="Availability %", range=[0, max(100, _tv_avail * 1.15, AVAIL_TARGET * 1.15)]),
+        showlegend=False,
+        bargap=0.35,
+    )
+    ac1, ac2, ac3 = st.columns([1.4, 1, 1])
+    with ac1:
+        st.plotly_chart(plotly_layout(fig_avail, 320), width="stretch")
+    with ac2:
+        kpi_card("Opening time", f"{_tv_opening_min/60:,.1f} h", f"{_tv_opening_min:,.0f} min (smene × 410)")
+    with ac3:
+        kpi_card("Zastoj", f"{ukupno_zastoj/60:,.1f} h", f"{ukupno_zastoj:,.0f} min u periodu")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     left, right = st.columns([1.15, 0.85])
     with left:
