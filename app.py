@@ -64,6 +64,22 @@ SMENE_FILE = APP_DIR / "smene.json"
 SMENA_MINUTA = 410
 PODRAZUMEVANE_SMENE = 2
 
+# Lokacija alata: koji alat je trenutno postavljen u kojoj AIDA mašini.
+# Čuva se u lokacije_alata.json (pored app.py) da preživi osvežavanje i restart.
+LOKACIJE_FILE = APP_DIR / "lokacije_alata.json"
+BROJ_MASINA = 12
+
+# Changeover / tip rotora (Cavity 1 i 2) — Google Form upisuje u tab "Changeover zapis"
+# u istom spreadsheet-u kao kvarovi (SHEET_ID_KVAROVI).
+SHEET_CHANGEOVER = "Changeover zapis"
+# Fiksna lista tipova rotora za padajuće menije Cavity 1 / Cavity 2.
+ROTOR_TIPOVI = ["F", "G", "AB", "AC", "AD", "AE"]
+CSV_URL_CHANGEOVER = (
+    f"https://docs.google.com/spreadsheets/d/{SHEET_ID_KVAROVI}/gviz/tq?tqx=out:csv&sheet={quote(SHEET_CHANGEOVER)}"
+)
+CHANGEOVER_CACHE_TTL = 60  # kratak keš: changeover unos treba da se vidi odmah
+CHANGEOVER_OVERRIDE_FILE = APP_DIR / "changeover_overrides.json"
+
 
 # =========================================================
 # STIL I POZADINA
@@ -1014,6 +1030,74 @@ def set_background(image_file: str):
         }}
         .company-logo-box {{ display: none !important; }}
 
+        /* ===== AIDA press mini animation (header, visual only) ===== */
+        .aida-press-anim {{
+            width: 72px;
+            height: 56px;
+            position: relative;
+            flex-shrink: 0;
+            margin-right: 10px;
+            filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.35));
+        }}
+        .aida-press-anim .frame {{
+            position: absolute; inset: 0;
+            border: 1.5px solid rgba(0, 229, 255, 0.45);
+            border-radius: 6px;
+            background: linear-gradient(180deg, rgba(20,16,40,0.9), rgba(10,12,22,0.95));
+            overflow: hidden;
+        }}
+        .aida-press-anim .crown {{
+            position: absolute; top: 3px; left: 14%; right: 14%; height: 7px;
+            background: linear-gradient(90deg, #7c5cff, #00e5ff);
+            border-radius: 2px;
+            box-shadow: 0 0 8px rgba(0,229,255,0.5);
+        }}
+        .aida-press-anim .pillar-l,
+        .aida-press-anim .pillar-r {{
+            position: absolute; top: 10px; bottom: 12px; width: 5px;
+            background: linear-gradient(180deg, #a78bfa, #4c1d95);
+            border-radius: 1px;
+        }}
+        .aida-press-anim .pillar-l {{ left: 16%; }}
+        .aida-press-anim .pillar-r {{ right: 16%; }}
+        .aida-press-anim .ram {{
+            position: absolute; left: 28%; right: 28%; height: 10px;
+            top: 12px;
+            background: linear-gradient(180deg, #00e5ff, #7c5cff);
+            border-radius: 2px;
+            box-shadow: 0 0 10px rgba(0,229,255,0.55);
+            animation: aida-ram 1.8s ease-in-out infinite;
+        }}
+        .aida-press-anim .die {{
+            position: absolute; left: 30%; right: 30%; bottom: 10px; height: 6px;
+            background: linear-gradient(90deg, #ff6bcb, #7c5cff);
+            border-radius: 1px;
+            box-shadow: 0 0 6px rgba(255,107,203,0.4);
+        }}
+        .aida-press-anim .spark {{
+            position: absolute; left: 50%; bottom: 14px; width: 4px; height: 4px;
+            margin-left: -2px; border-radius: 50%;
+            background: #fff;
+            opacity: 0;
+            animation: aida-spark 1.8s ease-in-out infinite;
+        }}
+        .aida-press-anim .label {{
+            position: absolute; bottom: 1px; left: 0; right: 0;
+            text-align: center; font-size: 7px; letter-spacing: 0.6px;
+            color: #67e8f9; font-family: 'JetBrains Mono', monospace; font-weight: 600;
+        }}
+        @keyframes aida-ram {{
+            0%, 12% {{ top: 12px; }}
+            45%, 55% {{ top: 28px; }}
+            88%, 100% {{ top: 12px; }}
+        }}
+        @keyframes aida-spark {{
+            0%, 42% {{ opacity: 0; transform: scale(0.5); }}
+            50% {{ opacity: 1; transform: scale(1.6); box-shadow: 0 0 8px #fff, 0 0 14px #00e5ff; }}
+            62%, 100% {{ opacity: 0; transform: scale(0.4); }}
+        }}
+
+
         /* Alert and refresh controls. */
         [data-testid="stPopover"] > button,
         .stButton > button,
@@ -1414,10 +1498,552 @@ def set_background(image_file: str):
         unsafe_allow_html=True,
     )
 
+
 set_background(APP_DIR / "background_tooling.png")
+
+# =========================================================
+# FLASHY / COLORFUL UI OVERRIDES (visual only — no logic change)
+# =========================================================
+st.markdown(
+    """
+    <style>
+    /* ===== Layout lock: nav fixed to viewport, content shifted right =====
+       IMPORTANT: do NOT apply filter/transform/perspective on .stApp or any
+       ancestor of .custom-left-nav — that breaks position:fixed and causes
+       the menu to cover the main content. */
+    :root { --left-nav-width: 240px !important; }
+    html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow-x: hidden !important;
+    }
+    .stApp {
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow-x: hidden !important;
+        /* static colorful background — no filter/transform animation here */
+        background:
+            radial-gradient(ellipse 80% 50% at 10% 0%, rgba(255, 0, 128, 0.18) 0%, transparent 55%),
+            radial-gradient(ellipse 70% 45% at 90% 10%, rgba(0, 200, 255, 0.16) 0%, transparent 50%),
+            radial-gradient(ellipse 60% 40% at 50% 100%, rgba(120, 0, 255, 0.14) 0%, transparent 55%),
+            linear-gradient(160deg, #0a0612 0%, #0d1020 40%, #081018 100%) !important;
+        background-attachment: fixed !important;
+        filter: none !important;
+        transform: none !important;
+        perspective: none !important;
+    }
+    /* Nav is fixed to the browser viewport, always on the far left */
+    .custom-left-nav {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: auto !important;
+        bottom: 0 !important;
+        width: var(--left-nav-width) !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        z-index: 999999 !important;
+        box-sizing: border-box !important;
+        transform: none !important;
+        filter: none !important;
+    }
+    /* Push ALL main Streamlit chrome to the right of the nav */
+    [data-testid="stAppViewContainer"],
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"] {
+        margin-left: var(--left-nav-width) !important;
+        padding-left: 0 !important;
+        width: calc(100% - var(--left-nav-width)) !important;
+        max-width: calc(100% - var(--left-nav-width)) !important;
+        box-sizing: border-box !important;
+    }
+    [data-testid="stAppViewContainer"] {
+        position: relative !important;
+        left: 0 !important;
+    }
+    [data-testid="stMain"], section[data-testid="stMain"], .stMain,
+    [data-testid="stMainBlockContainer"], .stMainBlockContainer, .block-container {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        box-sizing: border-box !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+    [data-testid="stSidebar"],
+    [data-testid="stSidebarCollapsedControl"],
+    [data-testid="collapsedControl"] {
+        display: none !important;
+        width: 0 !important;
+        min-width: 0 !important;
+    }
+
+    /* ===== Module enter animation ===== */
+    /* VAŽNO: animacija se NE sme primeniti na [data-testid="stMainBlockContainer"] > div,
+       jer je fiksni meni (.custom-left-nav) unutar tog elementa. transform/filter na
+       roditelju pretvara position:fixed u "relativno na roditelja" i meni prekrije sadržaj.
+       Zato koristimo samo opacity (bez transform/filter) i fill-mode "backwards". */
+    .section-card,
+    .kpi-card,
+    .kanban-item,
+    .kanban-item-fixed,
+    .action-card,
+    .tool-status-card {
+        animation: moduleFadeIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+    }
+    @keyframes moduleFadeIn {
+        from { opacity: 0; transform: translateY(14px) scale(0.985); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* ===== Compact shiny KPI cards ===== */
+    .kpi-card {
+        min-height: 72px !important;
+        padding: 10px 12px 8px !important;
+        border-radius: 10px !important;
+        border: 1px solid transparent !important;
+        background:
+            linear-gradient(145deg, rgba(30, 20, 55, 0.92), rgba(12, 28, 48, 0.95)) padding-box,
+            linear-gradient(135deg, #ff6bcb, #7c5cff, #00e5ff, #7dffb3) border-box !important;
+        box-shadow:
+            0 0 18px rgba(124, 92, 255, 0.28),
+            0 0 6px rgba(0, 229, 255, 0.18),
+            inset 0 1px 0 rgba(255,255,255,0.12) !important;
+        transition: transform 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease !important;
+        position: relative;
+        overflow: hidden;
+    }
+    .kpi-card::before {
+        content: "";
+        position: absolute;
+        top: -40%;
+        left: -30%;
+        width: 60%;
+        height: 180%;
+        background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%);
+        transform: translateX(-120%) rotate(12deg);
+        transition: transform 0.6s ease;
+        pointer-events: none;
+    }
+    .kpi-card:hover {
+        transform: translateY(-4px) scale(1.02) !important;
+        box-shadow:
+            0 0 28px rgba(255, 107, 203, 0.45),
+            0 0 14px rgba(0, 229, 255, 0.35),
+            0 8px 24px rgba(0,0,0,0.4) !important;
+        filter: brightness(1.12);
+    }
+    .kpi-card:hover::before { transform: translateX(280%) rotate(12deg); }
+    .kpi-title {
+        font-size: 9px !important;
+        letter-spacing: 0.7px !important;
+        background: linear-gradient(90deg, #ff9ed8, #a78bfa, #67e8f9);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .kpi-value {
+        font-size: 20px !important;
+        margin-top: 4px !important;
+        text-shadow: 0 0 12px rgba(0, 229, 255, 0.45), 0 0 4px rgba(255, 107, 203, 0.3);
+        color: #f8fbff !important;
+    }
+    .kpi-note { font-size: 9px !important; margin-top: 3px !important; color: #9ad4ff !important; }
+
+    /* ===== Section cards ===== */
+    .section-card {
+        padding: 12px !important;
+        margin-bottom: 10px !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(167, 139, 250, 0.35) !important;
+        background: linear-gradient(160deg, rgba(28, 18, 48, 0.88), rgba(14, 24, 42, 0.9)) !important;
+        box-shadow: 0 0 22px rgba(124, 92, 255, 0.18), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+        transition: box-shadow 0.25s ease, border-color 0.25s ease !important;
+    }
+    .section-card:hover {
+        border-color: rgba(0, 229, 255, 0.55) !important;
+        box-shadow: 0 0 32px rgba(0, 229, 255, 0.22), 0 0 12px rgba(255, 107, 203, 0.15) !important;
+    }
+
+    /* ===== Kanban / action / tool cards ===== */
+    .kanban-item, .kanban-item-fixed, .action-card, .tool-status-card {
+        padding: 9px 10px !important;
+        margin-bottom: 8px !important;
+        border-radius: 10px !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease !important;
+    }
+    .kanban-item:hover, .kanban-item-fixed:hover, .action-card:hover, .tool-status-card:hover {
+        transform: translateY(-3px) scale(1.015) !important;
+        border-color: rgba(255, 107, 203, 0.65) !important;
+        box-shadow: 0 0 20px rgba(255, 107, 203, 0.35), 0 0 10px rgba(0, 229, 255, 0.25) !important;
+        filter: brightness(1.1);
+    }
+
+    /* ===== Left nav neon ===== */
+    .custom-left-nav {
+        background: linear-gradient(180deg, #0c0618 0%, #0a1020 50%, #061018 100%) !important;
+        border-right: 1px solid rgba(167, 139, 250, 0.35) !important;
+        box-shadow: 8px 0 28px rgba(124, 92, 255, 0.2) !important;
+    }
+    .custom-nav-brand {
+        background: linear-gradient(135deg, rgba(255, 107, 203, 0.12), rgba(0, 229, 255, 0.08)) !important;
+        border-bottom: 1px solid rgba(167, 139, 250, 0.3) !important;
+    }
+    .custom-nav-brand-title {
+        background: linear-gradient(90deg, #ff9ed8, #a78bfa, #67e8f9);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .custom-nav-icon {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        width: 26px !important;
+        height: 26px !important;
+        border-radius: 7px !important;
+        background: linear-gradient(145deg, rgba(124,92,255,0.25), rgba(0,229,255,0.12)) !important;
+        border: 1px solid rgba(167,139,250,0.35) !important;
+        box-shadow: 0 0 10px rgba(124,92,255,0.25) !important;
+        font-size: 13px !important;
+        color: #a78bfa !important;
+        text-shadow: 0 0 8px rgba(167,139,250,0.6);
+        flex: 0 0 26px !important;
+    }
+    .custom-nav-item {
+        transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+    }
+    .custom-nav-item:hover {
+        background: linear-gradient(90deg, rgba(255, 107, 203, 0.18), rgba(0, 229, 255, 0.1)) !important;
+        border-left-color: #ff6bcb !important;
+        transform: translateX(4px) !important;
+        box-shadow: 0 0 14px rgba(255, 107, 203, 0.25) !important;
+        color: #fff !important;
+    }
+    .custom-nav-item:hover .custom-nav-icon {
+        color: #ff9ed8 !important;
+        border-color: rgba(255,107,203,0.55) !important;
+        box-shadow: 0 0 14px rgba(255,107,203,0.4) !important;
+    }
+    .custom-nav-item.active {
+        background: linear-gradient(90deg, rgba(124, 92, 255, 0.35), rgba(0, 229, 255, 0.15)) !important;
+        border-left-color: #00e5ff !important;
+        box-shadow: inset 3px 0 0 #00e5ff, 0 0 16px rgba(0, 229, 255, 0.25) !important;
+        color: #e0f7ff !important;
+    }
+    .custom-nav-item.active .custom-nav-icon {
+        color: #67e8f9 !important;
+        border-color: rgba(0,229,255,0.55) !important;
+        box-shadow: 0 0 14px rgba(0,229,255,0.45) !important;
+        background: linear-gradient(145deg, rgba(0,229,255,0.25), rgba(124,92,255,0.2)) !important;
+    }
+
+    /* ===== Header shine ===== */
+    .tower-title {
+        background: linear-gradient(90deg, #ff9ed8, #c4b5fd, #67e8f9, #7dffb3);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        animation: titleShine 4s linear infinite;
+    }
+    @keyframes titleShine { to { background-position: 200% center; } }
+    .tower-title-box {
+        border: 1px solid rgba(167, 139, 250, 0.4) !important;
+        background: linear-gradient(135deg, rgba(40, 20, 60, 0.6), rgba(12, 28, 48, 0.7)) !important;
+        box-shadow: 0 0 20px rgba(124, 92, 255, 0.2) !important;
+    }
+    .live-badge {
+        background: linear-gradient(90deg, #ff2d6a, #7c5cff) !important;
+        border: 0 !important;
+        color: #fff !important;
+        box-shadow: 0 0 12px rgba(255, 45, 106, 0.5);
+        animation: pulseBadge 1.8s ease-in-out infinite;
+    }
+    @keyframes pulseBadge {
+        0%, 100% { box-shadow: 0 0 8px rgba(255, 45, 106, 0.4); }
+        50% { box-shadow: 0 0 18px rgba(255, 45, 106, 0.75); }
+    }
+
+    /* ===== Filter / buttons — force dark readable (fix white boxes) ===== */
+    [data-testid="stPopover"] > button,
+    [data-testid="stPopover"] > button:focus,
+    [data-testid="stPopover"] > button:focus-visible,
+    .stButton > button,
+    .stDownloadButton > button,
+    .stLinkButton > a,
+    div[data-testid="stHorizontalBlock"] [data-testid="stPopover"] > button,
+    div[data-testid="stHorizontalBlock"] .stButton > button {
+        min-height: 40px !important;
+        height: auto !important;
+        border-radius: 8px !important;
+        background: linear-gradient(135deg, #1a1530 0%, #121a28 100%) !important;
+        background-color: #1a1530 !important;
+        border: 1px solid rgba(167, 139, 250, 0.55) !important;
+        color: #e8f0ff !important;
+        box-shadow: 0 0 12px rgba(124, 92, 255, 0.22) !important;
+        transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+        opacity: 1 !important;
+    }
+    [data-testid="stPopover"] > button *,
+    [data-testid="stPopover"] > button p,
+    [data-testid="stPopover"] > button span,
+    [data-testid="stPopover"] > button div,
+    .stButton > button *,
+    .stButton > button p,
+    .stButton > button span {
+        color: #e8f0ff !important;
+        opacity: 1 !important;
+    }
+    [data-testid="stPopover"] > button:hover,
+    .stButton > button:hover,
+    .stDownloadButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 0 22px rgba(0, 229, 255, 0.4), 0 0 10px rgba(255, 107, 203, 0.3) !important;
+        border-color: #00e5ff !important;
+        background: linear-gradient(135deg, #221a40 0%, #152238 100%) !important;
+        background-color: #221a40 !important;
+        color: #ffffff !important;
+    }
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #ff6bcb, #7c5cff) !important;
+        background-color: #7c5cff !important;
+        border-color: transparent !important;
+        color: #fff !important;
+        box-shadow: 0 0 16px rgba(255, 107, 203, 0.45) !important;
+    }
+
+    /* ===== Charts / tables glow ===== */
+    [data-testid="stPlotlyChart"],
+    [data-testid="stDataFrame"] {
+        border-radius: 10px !important;
+        border: 1px solid rgba(124, 92, 255, 0.35) !important;
+        box-shadow: 0 0 18px rgba(124, 92, 255, 0.12) !important;
+        background: linear-gradient(160deg, rgba(22,16,40,0.9), rgba(12,20,36,0.92)) !important;
+    }
+
+    /* ===== Filter strip ===== */
+    .filter-summary-bar, .module-command-bar, .active-filter-strip {
+        border: 1px solid rgba(167, 139, 250, 0.3) !important;
+        background: linear-gradient(90deg, rgba(40, 20, 60, 0.7), rgba(12, 30, 50, 0.75)) !important;
+    }
+    .filter-summary-item b, .active-filter-strip b, .active-page-strip b {
+        color: #67e8f9 !important;
+        text-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .stApp, .tower-title, .live-badge, .kpi-card, .section-card,
+        .kanban-item, .kanban-item-fixed, .action-card, .tool-status-card,
+        [data-testid="stMainBlockContainer"] > div {
+            animation: none !important;
+            transition: none !important;
+        }
+    }
+    @media (max-width: 1000px) {
+        :root { --left-nav-width: 205px !important; }
+        [data-testid="stAppViewContainer"],
+        [data-testid="stHeader"],
+        [data-testid="stToolbar"] {
+            margin-left: var(--left-nav-width) !important;
+            width: calc(100% - var(--left-nav-width)) !important;
+            max-width: calc(100% - var(--left-nav-width)) !important;
+        }
+    }
+
+    /* Final override: kill any earlier padding-left double-offset on content */
+    [data-testid="stAppViewContainer"] {
+        padding-left: 0 !important;
+        margin-left: var(--left-nav-width) !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# =========================================================
+# CRNI PADAJUĆI MENIJI / FILTERI / KALENDAR (bela i žuta slova)
+# =========================================================
+st.markdown(
+    """
+    <style>
+    /* ---- Zatvorena polja (selectbox, multiselect, unos, dugmad filtera) ---- */
+    html body [data-baseweb="select"] > div,
+    html body [data-baseweb="select"] input,
+    html body [data-baseweb="input"],
+    html body [data-baseweb="input"] input,
+    html body .stTextInput input,
+    html body .stNumberInput input,
+    html body .stDateInput input,
+    html body .stDateInput [data-baseweb="input"],
+    html body [data-testid="stPopover"] > button,
+    html body [data-testid="stPopover"] > button p {
+        background: #000000 !important;
+        background-color: #000000 !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border-color: #ffd84d !important;
+    }
+    html body [data-baseweb="select"] > div { border: 1px solid #ffd84d !important; }
+    html body [data-baseweb="select"] span,
+    html body [data-baseweb="select"] div[value],
+    html body [data-baseweb="select"] [class*="singleValue"] {
+        color: #ffd84d !important;
+        -webkit-text-fill-color: #ffd84d !important;
+        background: transparent !important;
+    }
+    html body [data-baseweb="select"] svg,
+    html body [data-testid="stPopover"] > button svg { fill: #ffd84d !important; color: #ffd84d !important; }
+    html body [data-testid="stPopover"] > button:hover { border-color: #ffffff !important; background: #111111 !important; }
+    html body input::placeholder, html body textarea::placeholder { color: #cfcfcf !important; opacity: 1 !important; }
+
+    /* ---- Čipovi izabranih stavki (multiselect) ---- */
+    html body [data-baseweb="tag"] {
+        background: #1a1a1a !important;
+        border: 1px solid #ffd84d !important;
+    }
+    html body [data-baseweb="tag"] span, html body [data-baseweb="tag"] svg { color: #ffffff !important; fill: #ffffff !important; }
+
+    /* ---- Otvorene liste i paneli ---- */
+    html body [data-baseweb="popover"],
+    html body [data-baseweb="popover"] > div,
+    html body [data-baseweb="menu"],
+    html body ul[data-baseweb="menu"],
+    html body [role="listbox"],
+    html body [data-testid="stPopoverBody"] {
+        background: #000000 !important;
+        background-color: #000000 !important;
+        border: 1px solid #ffd84d !important;
+        color: #ffffff !important;
+    }
+    html body [role="option"],
+    html body [data-baseweb="menu"] li,
+    html body li[role="option"] {
+        background: #000000 !important;
+        background-color: #000000 !important;
+        color: #ffffff !important;
+    }
+    html body [role="option"] *, html body [data-baseweb="menu"] li * { color: inherit !important; background: transparent !important; }
+    html body [role="option"]:hover, html body [data-baseweb="menu"] li:hover,
+    html body [role="option"][aria-selected="true"], html body [data-baseweb="menu"] li[aria-selected="true"] {
+        background: #2a2400 !important;
+        background-color: #2a2400 !important;
+        color: #ffd84d !important;
+    }
+    html body [data-testid="stPopoverBody"] label p,
+    html body [data-testid="stPopoverBody"] h5,
+    html body [data-testid="stPopoverBody"] [data-testid="stWidgetLabel"] p { color: #ffffff !important; }
+    html body [data-testid="stPopoverBody"] [data-testid="stCaptionContainer"] { color: #ffd84d !important; }
+
+    /* ---- Zatvorena polja: i unutrašnji omotači crni (bez belih delova) ---- */
+    html body [data-testid="stSelectbox"] [data-baseweb="select"],
+    html body [data-testid="stMultiSelect"] [data-baseweb="select"],
+    html body [data-baseweb="select"],
+    html body [data-baseweb="select"] > div,
+    html body [data-baseweb="select"] > div > div,
+    html body [data-baseweb="select"] > div > div > div,
+    html body [data-baseweb="base-input"],
+    html body [data-baseweb="textarea"],
+    html body [data-baseweb="textarea"] textarea,
+    html body [data-testid="stNumberInputContainer"],
+    html body [data-testid="stNumberInputContainer"] > div,
+    html body [data-testid="stNumberInput"] button,
+    html body [data-testid="stDateInput"] > div,
+    html body [data-testid="stDateInput"] [data-baseweb="base-input"],
+    html body [data-testid="stTextInput"] > div > div {
+        background: #000000 !important;
+        background-color: #000000 !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+    html body [data-testid="stNumberInput"] button svg { fill: #ffd84d !important; }
+    html body [data-baseweb="select"] [aria-disabled="true"], html body [data-baseweb="select"][aria-disabled="true"] > div { opacity: .6 !important; }
+    html body [data-baseweb="select"] input { caret-color: #ffd84d !important; }
+
+    /* ---- Kalendar ---- */
+    html body [data-baseweb="calendar"] {
+        background: #000000 !important;
+        background-color: #000000 !important;
+        border: 1px solid #ffd84d !important;
+        color: #ffffff !important;
+    }
+    html body [data-baseweb="calendar"] *,
+    html body [data-baseweb="calendar"] button,
+    html body [data-baseweb="calendar"] [role="gridcell"],
+    html body [data-baseweb="calendar"] [role="gridcell"] > div {
+        background: transparent !important;
+        background-color: transparent !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        border-radius: 6px !important;
+        opacity: 1 !important;
+    }
+    /* naslov (mesec/godina) i nazivi dana u nedelji - žuto */
+    html body [data-baseweb="calendar"] [role="heading"],
+    html body [data-baseweb="calendar"] [role="heading"] *,
+    html body [data-baseweb="calendar"] abbr,
+    html body [data-baseweb="calendar"] [role="columnheader"],
+    html body [data-baseweb="calendar"] [role="columnheader"] * {
+        color: #ffd84d !important;
+        -webkit-text-fill-color: #ffd84d !important;
+        font-weight: 700 !important;
+        text-decoration: none !important;
+    }
+    html body [data-baseweb="calendar"] svg { fill: #ffd84d !important; color: #ffd84d !important; }
+    /* hover na danu */
+    html body [data-baseweb="calendar"] [role="gridcell"]:hover,
+    html body [data-baseweb="calendar"] [role="gridcell"]:hover > div,
+    html body [data-baseweb="calendar"] button:hover {
+        background: #3a3200 !important;
+        background-color: #3a3200 !important;
+        color: #ffffff !important;
+    }
+    /* danas */
+    html body [data-baseweb="calendar"] [aria-label*="Today"],
+    html body [data-baseweb="calendar"] [aria-current="date"] { outline: 1px solid #ffd84d !important; }
+    /* nedostupni dani */
+    html body [data-baseweb="calendar"] [aria-disabled="true"],
+    html body [data-baseweb="calendar"] [aria-disabled="true"] * {
+        color: #6b6b6b !important;
+        -webkit-text-fill-color: #6b6b6b !important;
+    }
+    /* IZABRANI DATUM / OPSEG - žuta pozadina, crna slova */
+    html body [data-baseweb="calendar"] [aria-selected="true"],
+    html body [data-baseweb="calendar"] [aria-selected="true"] > div,
+    html body [data-baseweb="calendar"] [aria-selected="true"] *,
+    html body [data-baseweb="calendar"] [aria-pressed="true"],
+    html body [data-baseweb="calendar"] [aria-pressed="true"] * {
+        background: #ffd84d !important;
+        background-color: #ffd84d !important;
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        font-weight: 800 !important;
+    }
+
+    /* ---- Dugmad u modulima ---- */
+    html body .stButton > button, html body .stDownloadButton > button, html body .stLinkButton > a {
+        background: #000000 !important;
+        background-color: #000000 !important;
+        color: #ffffff !important;
+        border: 1px solid #ffd84d !important;
+    }
+    html body .stButton > button p { color: #ffffff !important; }
+    html body .stButton > button:hover { background: #1a1a1a !important; border-color: #ffffff !important; color: #ffd84d !important; }
+    html body .stButton > button:hover p { color: #ffd84d !important; }
+
+    /* ---- Kartica mašine: status preventive odvojen od naziva ---- */
+    .lok-head { display: flex !important; align-items: center !important; justify-content: flex-start !important; gap: 14px !important; flex-wrap: wrap; }
+    .lok-head .lok-chip { margin-left: 26px !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 def image_to_data_uri(image_path: str) -> str:
+
     try:
         path = Path(__file__).with_name(image_path)
         suffix = path.suffix.lower().replace(".", "") or "png"
@@ -1626,44 +2252,140 @@ def show_dark_dataframe(df, width="stretch", height="content"):
     except Exception:
         st.dataframe(df, width=width, height=height)
 
-PLOTLY_COLORWAY = ["#9ecaff", "#2196f3", "#ffb77b", "#ffb4ab", "#78dba9", "#c8c6c5", "#89919d"]
+PLOTLY_COLORWAY = ["#ff3d5a", "#ffb020", "#3dff9a", "#00e5ff", "#a78bfa", "#38bdf8", "#ff6bcb", "#7c5cff"]
 
 # Jedinstvene semafor boje za sve grafikone:
 # OK = zeleno, praćenje/srednje = narandžasto, loše/kritično = crveno.
 STATUS_COLOR_MAP = {
-    "🔴 Kritično": "#ff2d35",
-    "🟡 Praćenje": "#f5b942",
-    "🟢 OK": "#42d392",
-    "🔴 Za preventivu": "#ff2d35",
-    "🟡 Blizu preventive": "#f5b942",
+    "🔴 Kritično": "#ff3d5a",
+    "🟡 Praćenje": "#ffb020",
+    "🟢 OK": "#3dff9a",
+    "🔴 Za preventivu": "#ff3d5a",
+    "🟡 Blizu preventive": "#ffb020",
     "⚪ Postavi početno stanje": "#9ca7b5",
     "⚫ Prešao životni vek": "#7b8794",
-    "🔴 Nema": "#ff2d35",
-    "🟡 Ispod minimuma": "#f5b942",
-    "🟢 Dobro": "#42d392",
-    "🔵 Preko maksimuma": "#4fa8f5",
+    "🔴 Nema": "#ff3d5a",
+    "🟡 Ispod minimuma": "#ffb020",
+    "🟢 Dobro": "#3dff9a",
+    "🔵 Preko maksimuma": "#00e5ff",
 }
+
+# Semafor paleta (Predlog 4)
+SEMAFOR_CRVENA = "#ff3d5a"
+SEMAFOR_NARANDZASTA = "#ffb020"
+SEMAFOR_ZELENA = "#3dff9a"
+
+
+def _semafor_colors_from_values(values):
+    """Boji stubove po vrednosti: gornja trećina crveno, srednja narandžasto, donja zeleno."""
+    try:
+        vals = [float(v) if v is not None else 0.0 for v in values]
+    except Exception:
+        vals = [0.0] * (len(values) if values is not None else 1)
+    if not vals:
+        return [SEMAFOR_ZELENA]
+    vmax = max(vals) if max(vals) > 0 else 1.0
+    colors = []
+    for v in vals:
+        ratio = v / vmax
+        if ratio >= 0.66:
+            colors.append(SEMAFOR_CRVENA)
+        elif ratio >= 0.33:
+            colors.append(SEMAFOR_NARANDZASTA)
+        else:
+            colors.append(SEMAFOR_ZELENA)
+    return colors
 
 
 def plotly_layout(fig, height=None):
     fig.update_layout(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="#1c2026",
-        font=dict(color="#dfe2ea", size=12, family="JetBrains Mono, monospace"),
-        title_font=dict(color="#dfe2ea", size=14, family="Inter, sans-serif"),
-        legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#bfc7d4", family="JetBrains Mono, monospace", size=10)),
+        plot_bgcolor="rgba(12, 14, 22, 0.78)",
+        font=dict(color="#e8f0ff", size=12, family="JetBrains Mono, monospace"),
+        title_font=dict(color="#f0e7ff", size=15, family="Inter, sans-serif"),
+        legend=dict(
+            bgcolor="rgba(16,18,28,0.88)",
+            bordercolor="rgba(255,176,32,0.35)",
+            borderwidth=1,
+            font=dict(color="#e8f0ff", family="JetBrains Mono, monospace", size=10),
+        ),
         colorway=PLOTLY_COLORWAY,
-        margin=dict(t=56, l=10, r=10, b=10),
-        xaxis=dict(gridcolor="#31353b", zerolinecolor="#404752", color="#bfc7d4"),
-        yaxis=dict(gridcolor="#31353b", zerolinecolor="#404752", color="#bfc7d4"),
+        margin=dict(t=58, l=12, r=12, b=12),
+        xaxis=dict(
+            gridcolor="rgba(255,255,255,0.06)",
+            zerolinecolor="rgba(255,176,32,0.25)",
+            color="#c4b5fd",
+            showline=True,
+            linecolor="rgba(255,255,255,0.12)",
+        ),
+        yaxis=dict(
+            gridcolor="rgba(255,255,255,0.06)",
+            zerolinecolor="rgba(255,176,32,0.25)",
+            color="#c4b5fd",
+            showline=True,
+            linecolor="rgba(255,255,255,0.12)",
+        ),
     )
     fig.update_layout(
-        hoverlabel=dict(bgcolor="#262a30", bordercolor="#404752", font=dict(color="#dfe2ea", size=11, family="JetBrains Mono, monospace")),
-        modebar=dict(bgcolor="rgba(0,0,0,0)", color="#89919d", activecolor="#9ecaff"),
+        hoverlabel=dict(
+            bgcolor="#141820",
+            bordercolor="#ffb020",
+            font=dict(color="#f0e7ff", size=11, family="JetBrains Mono, monospace"),
+        ),
+        modebar=dict(bgcolor="rgba(0,0,0,0)", color="#9ca7b5", activecolor="#ffb020"),
         bargap=0.28,
+        bargroupgap=0.10,
     )
-    fig.update_traces(marker_line_width=0)
+
+    # Semafor boje na običnim stubovima.
+    # Status grafikoni (STATUS_COLOR_MAP) zadržavaju svoju semantičku boju.
+    status_hex = set(STATUS_COLOR_MAP.values())
+    try:
+        for tr in fig.data:
+            if getattr(tr, "type", None) != "bar":
+                continue
+            mc = None
+            try:
+                mc = tr.marker.color if tr.marker is not None else None
+            except Exception:
+                mc = None
+            if isinstance(mc, (list, tuple)):
+                if any(isinstance(c, str) and c in status_hex for c in mc):
+                    continue
+            # px.bar(color=...) pravi po jedan trace po statusu sa JEDNOM bojom (string).
+            # Ako je to semafor boja (zeleno/narandžasto/crveno), ne prepisuj je gradijentom.
+            if isinstance(mc, str) and mc in status_hex:
+                continue
+            # Vrednosti stubova: kod horizontalnih je x, kod vertikalnih y
+            try:
+                orient = getattr(tr, "orientation", None) or "v"
+                if orient == "h":
+                    values = list(tr.x) if tr.x is not None else []
+                else:
+                    values = list(tr.y) if tr.y is not None else []
+            except Exception:
+                values = []
+            if not values:
+                continue
+            colors = _semafor_colors_from_values(values)
+            try:
+                tr.marker.color = colors
+                tr.marker.line = dict(width=0, color="rgba(0,0,0,0)")
+                tr.opacity = 0.95
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    fig.update_traces(
+        marker_line_width=0,
+        selector=dict(type="bar"),
+    )
+    fig.update_traces(
+        marker=dict(line=dict(width=1.5, color="rgba(255,176,32,0.30)")),
+        selector=dict(type="scatter"),
+    )
     if height:
         fig.update_layout(height=height)
     return fig
@@ -2559,7 +3281,9 @@ def ucitaj_delove():
     out["NAZIV"] = df[col_naziv].astype(str).str.strip() if col_naziv else ""
     out["POZICIJA"] = df[col_pozicija].astype(str).str.strip() if col_pozicija else ""
     out["PROJECT_MODEL"] = df[col_model].astype(str).str.strip() if col_model else ""
-    out["STANJE"] = df[col_stanje].apply(to_number).fillna(0) if col_stanje else 0
+    # Prazno polje STANJE ostaje NaN (ne računa se kao 0).
+    # Samo eksplicitno upisana 0 ulazi u "Stanje 0".
+    out["STANJE"] = df[col_stanje].apply(lambda v: to_number(v, default=float("nan"))) if col_stanje else float("nan")
     out["MINIMUM"] = df[col_min].apply(to_number).fillna(0) if col_min else 0
     out["MAKSIMUM"] = df[col_max].apply(to_number).fillna(0) if col_max else 0
     out["STATUS_ZALIHE"] = df[col_status_zalihe].astype(str).str.strip() if col_status_zalihe else ""
@@ -2933,12 +3657,25 @@ head_col1, head_col2, head_col3 = st.columns([5.5, 0.65, 2.0], vertical_alignmen
 with head_col1:
     st.markdown(
         """
-        <div class="tower-title-box">
-            <div class="tower-title-line">
-                <span class="tower-title">Tooling Control Tower</span>
-                <span class="live-badge">UŽIVO</span>
+        <div class="tower-title-box" style="display:flex;align-items:center;gap:4px;">
+            <div class="aida-press-anim" title="AIDA presa — šematski prikaz rada">
+                <div class="frame">
+                    <div class="crown"></div>
+                    <div class="pillar-l"></div>
+                    <div class="pillar-r"></div>
+                    <div class="ram"></div>
+                    <div class="die"></div>
+                    <div class="spark"></div>
+                    <div class="label">AIDA</div>
+                </div>
             </div>
-            <div class="tower-subtitle">Centralni sistem nadzora i upravljanja alatnicom</div>
+            <div style="flex:1;min-width:0;">
+                <div class="tower-title-line">
+                    <span class="tower-title">Tooling Control Tower</span>
+                    <span class="live-badge">UŽIVO</span>
+                </div>
+                <div class="tower-subtitle">Centralni sistem nadzora i upravljanja alatnicom</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -3069,19 +3806,20 @@ st.markdown(
 # LEVA NAVIGACIJA + KOMPAKTNI FILTERI U GORNJOJ LINIJI
 # =========================================================
 PAGE_CONFIG = [
-    ("tv-panel", "🖥️", "TV Panel"),
-    ("kvarovi", "🧰", "Kvarovi"),
-    ("mttr-mtbf", "📊", "MTTR / MTBF"),
-    ("preventivno", "🔧", "Preventivno"),
-    ("prediktivno", "🔮", "Prediktivno"),
-    ("kriticni-alati", "🚨", "Kritični alati"),
-    ("rezervni-delovi", "📦", "Rezervni delovi"),
-    ("akcije", "🗂️", "Akcije"),
-    ("unos-udaraca", "📝", "Unos udaraca"),
-    ("udarci-period", "📈", "Udarci po periodu"),
-    ("dokumentacija", "📚", "Dokumentacija"),
-    ("ai-analiza", "🤖", "AI analiza"),
-    ("sirovi-podaci", "🗄️", "Sirovi podaci"),
+    ("tv-panel", "◈", "TV Panel"),
+    ("kvarovi", "⚡", "Kvarovi"),
+    ("mttr-mtbf", "⏱", "MTTR / MTBF"),
+    ("preventivno", "⚙", "Preventivno"),
+    ("prediktivno", "✦", "Prediktivno"),
+    ("kriticni-alati", "◉", "Kritični alati"),
+    ("rezervni-delovi", "▣", "Rezervni delovi"),
+    ("akcije", "▸", "Akcije"),
+    ("lokacija-alata", "⌖", "Lokacija alata"),
+    ("unos-udaraca", "✎", "Unos udaraca"),
+    ("udarci-period", "▥", "Udarci po periodu"),
+    ("dokumentacija", "☰", "Dokumentacija"),
+    ("ai-analiza", "✧", "AI analiza"),
+    ("sirovi-podaci", "▤", "Sirovi podaci"),
 ]
 
 PAGE_LABEL_BY_SLUG = {slug: f"{icon} {label}" for slug, icon, label in PAGE_CONFIG}
@@ -3348,7 +4086,8 @@ def status_zalihe_po_pravilima(row):
     return "🟢 OK"
 
 if not delovi.empty:
-    delovi_zero = delovi[delovi["STANJE"] <= 0]
+    # Samo lokacije gde je STANJE eksplicitno 0 (prazna polja = NaN, ne ulaze).
+    delovi_zero = delovi[delovi["STANJE"] == 0]
     grupisani_delovi = delovi.groupby("KLJUC_DELA", as_index=False).agg(
         PART_ID=("PART_ID", "first"),
         NAZIV=("NAZIV", "first"),
@@ -3473,6 +4212,278 @@ def izracunaj_operating_minute(udarci_dnevno_df, period=None, alati=None):
     return po_alatu, float(dn["OPERATING_MIN"].sum())
 
 
+def load_lokacije() -> dict:
+    """Vraća {"AIDA 1": {"alat": "...", "datum": "dd.mm.YYYY HH:MM"}, ...}."""
+    try:
+        if LOKACIJE_FILE.exists():
+            with open(LOKACIJE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+def save_lokacija(masina: str, alat: str) -> bool:
+    """Upisuje koji je alat u mašini (prazan string = mašina je prazna)."""
+    try:
+        data = load_lokacije()
+        data[masina] = {"alat": str(alat or "").strip(), "datum": pd.Timestamp.now().strftime("%d.%m.%Y %H:%M")}
+        tmp = LOKACIJE_FILE.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        tmp.replace(LOKACIJE_FILE)  # atomski upis, da se fajl ne ošteti
+        return True
+    except Exception:
+        return False
+
+
+def _parse_form_timestamp(series: pd.Series) -> pd.Series:
+    """Google Form timestamp, npr. '30.10.2026. 10:36:59' (sa tačkom posle godine)."""
+    if pd.api.types.is_datetime64_any_dtype(series):
+        return series
+    s = series.astype(str).str.strip()
+    s = s.str.replace(r"(\d{4})\.", r"\1", regex=True)
+    parsed = pd.to_datetime(s, errors="coerce", dayfirst=True)
+    if parsed.isna().all():
+        parsed = pd.to_datetime(series, errors="coerce")
+    return parsed
+
+
+def _changeover_kandidati():
+    """Vraća sirove tabele changeover taba: prvo gviz CSV (svežiji), pa XLSX export."""
+    greske = []
+    try:
+        r = requests.get(CSV_URL_CHANGEOVER, timeout=45)
+        if r.status_code == 200 and len(r.content) > 5:
+            yield "csv", pd.read_csv(BytesIO(r.content), dtype=str, encoding="utf-8")
+        else:
+            greske.append(f"CSV HTTP {r.status_code}")
+    except Exception as exc:
+        greske.append(f"CSV: {exc}")
+    try:
+        content = download_bytes(EXCEL_URL_KVAROVI)
+        excel = pd.ExcelFile(BytesIO(content))
+        target = next((n for n in excel.sheet_names if "changeover" in str(n).strip().lower()), None)
+        if target is None:
+            greske.append("U XLSX-u nema taba čiji naziv sadrži 'changeover': " + ", ".join(map(str, excel.sheet_names)))
+        else:
+            yield "xlsx", pd.read_excel(excel, sheet_name=target, dtype=object)
+    except Exception as exc:
+        greske.append(f"XLSX: {exc}")
+    if greske:
+        yield "greska", "; ".join(greske)
+
+
+def _changeover_obradi(df: pd.DataFrame):
+    """Mapira kolone i čisti podatke. Vraća (DataFrame ili None, opis problema)."""
+    df = df.loc[:, ~df.columns.astype(str).str.contains("^Unnamed", case=False)]
+    raw_cols = list(df.columns)
+
+    def _pick(cands):
+        lower_map = {str(c).strip().lower(): c for c in raw_cols}
+        for cand in cands:
+            if cand.lower() in lower_map:
+                return lower_map[cand.lower()]
+        hit = find_col(df, cands)
+        if hit is not None:
+            return hit
+        for c in raw_cols:
+            cl = str(c).strip().lower().replace(" ", "").replace("_", "")
+            for cand in cands:
+                key = cand.lower().replace(" ", "").replace("_", "")
+                if key and key in cl:
+                    return c
+        return None
+
+    col_ts = _pick(["Временска ознака", "Timestamp", "Vremenska oznaka", "Datum", "Date"])
+    if col_ts is None and raw_cols:
+        col_ts = raw_cols[0]
+    col_masina = _pick(["MASINA", "Mašina", "MACHINE", "AIDA"])
+    col_alat = _pick(["ALAT", "TOOL", "KALUP"])
+    col_c1 = _pick(["CAVITY_1", "CAVITY1", "Cavity 1", "ROTOR 1", "TIP ROTORA 1"])
+    col_c2 = _pick(["CAVITY_2", "CAVITY2", "Cavity 2", "ROTOR 2", "TIP ROTORA 2"])
+    col_unosio = _pick(["UNOSIO", "Uneo", "OPERATER", "Ko unosi"])
+    col_nap = _pick(["NAPOMENA", "Napomena", "NOTE", "KOMENTAR", "COMMENT"])
+
+    if col_masina is None or (col_c1 is None and col_c2 is None):
+        return None, f"Nisu pronađene kolone MASINA/CAVITY. Kolone u tabu: {[str(c) for c in raw_cols]}"
+
+    def _series_str(col):
+        if col is None:
+            return pd.Series([""] * len(df), index=df.index)
+        out = df[col].map(lambda v: "" if pd.isna(v) else str(v).strip())
+        return out.replace({"nan": "", "None": "", "NaT": "", "<NA>": ""})
+
+    out = pd.DataFrame(index=df.index)
+    out["TIMESTAMP"] = _parse_form_timestamp(df[col_ts]) if col_ts is not None else pd.NaT
+    out["MASINA"] = _series_str(col_masina)
+    out["ALAT"] = _series_str(col_alat).map(normalize_tool_name)
+    out["CAVITY_1"] = _series_str(col_c1)
+    out["CAVITY_2"] = _series_str(col_c2)
+    out["UNOSIO"] = _series_str(col_unosio)
+    out["NAPOMENA"] = _series_str(col_nap)
+
+    def _norm_masina(v):
+        s = str(v or "").strip().upper()
+        m = re.search(r"(\d{1,2})", s)
+        return f"AIDA {int(m.group(1))}" if m else s
+
+    out["MASINA"] = out["MASINA"].map(_norm_masina)
+    out = out[out["MASINA"].str.match(r"^AIDA\s+\d+$", na=False)].copy()
+    out = out.sort_values("TIMESTAMP", ascending=True, na_position="first", kind="stable")
+    return out.reset_index(drop=True), ""
+
+
+@st.cache_data(ttl=CHANGEOVER_CACHE_TTL, show_spinner=False)
+def ucitaj_changeover() -> pd.DataFrame:
+    """Učitava tab 'Changeover zapis' (Google Form odgovori).
+    Greške se NE gutaju (da se prazan rezultat ne kešira): izuzetak hvata pozivalac."""
+    problemi = []
+    for izvor, df in _changeover_kandidati():
+        if izvor == "greska":
+            problemi.append(str(df))
+            continue
+        if df is None or df.empty:
+            problemi.append(f"{izvor}: tab je prazan")
+            continue
+        out, opis = _changeover_obradi(df)
+        if out is not None:
+            return out
+        problemi.append(f"{izvor}: {opis}")
+    raise RuntimeError(" | ".join(problemi) or "Changeover tab nije pronađen.")
+
+
+def load_changeover_overrides() -> dict:
+    """Ručne ispravke tipa rotora sačuvane lokalno (ako Forms unos fali)."""
+    try:
+        if CHANGEOVER_OVERRIDE_FILE.exists():
+            with open(CHANGEOVER_OVERRIDE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                return data
+    except Exception:
+        pass
+    return {}
+
+
+def save_changeover_override(masina: str, cavity_1: str, cavity_2: str, unosio: str = "") -> bool:
+    try:
+        data = load_changeover_overrides()
+        data[masina] = {
+            "cavity_1": str(cavity_1 or "").strip(),
+            "cavity_2": str(cavity_2 or "").strip(),
+            "unosio": str(unosio or "").strip() or "Ručna izmena (program)",
+            "datum": pd.Timestamp.now().strftime("%d.%m.%Y %H:%M"),
+            "timestamp": pd.Timestamp.now().isoformat(timespec="seconds"),
+        }
+        tmp = CHANGEOVER_OVERRIDE_FILE.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        tmp.replace(CHANGEOVER_OVERRIDE_FILE)
+        return True
+    except Exception:
+        return False
+
+
+def changeover_po_masini(df_ch: pd.DataFrame, overrides=None) -> dict:
+    """Poslednji changeover po mašini. Override pobeđuje ako je noviji od sheet unosa."""
+    result = {}
+    if df_ch is not None and not df_ch.empty:
+        for masina, grp in df_ch.groupby("MASINA"):
+            row = grp.sort_values("TIMESTAMP", ascending=False, na_position="last").iloc[0]
+            ts = row.get("TIMESTAMP")
+            result[str(masina)] = {
+                "cavity_1": str(row.get("CAVITY_1") or ""),
+                "cavity_2": str(row.get("CAVITY_2") or ""),
+                "alat": str(row.get("ALAT") or ""),
+                "unosio": str(row.get("UNOSIO") or ""),
+                "napomena": str(row.get("NAPOMENA") or ""),
+                "datum": ts.strftime("%d.%m.%Y %H:%M") if pd.notna(ts) else "",
+                "timestamp": ts.isoformat() if pd.notna(ts) else "",
+                "izvor": "Google Form",
+            }
+    overrides = overrides if overrides is not None else load_changeover_overrides()
+    for masina, ov in (overrides or {}).items():
+        sheet_ts = result.get(masina, {}).get("timestamp") or ""
+        ov_ts = str(ov.get("timestamp") or "")
+        # Override važi ako nema sheet unosa ili je override noviji
+        if (not sheet_ts) or (ov_ts >= sheet_ts):
+            result[masina] = {
+                "cavity_1": str(ov.get("cavity_1") or ""),
+                "cavity_2": str(ov.get("cavity_2") or ""),
+                "alat": result.get(masina, {}).get("alat", ""),
+                "unosio": str(ov.get("unosio") or "Ručna izmena"),
+                "napomena": "",
+                "datum": str(ov.get("datum") or ""),
+                "timestamp": ov_ts,
+                "izvor": "Ručna izmena",
+            }
+    return result
+
+
+def lista_tipova_rotora(df_ch: pd.DataFrame) -> list:
+    """Tipovi rotora za padajuće menije: fiksna lista (F, G, AB, AC, AD, AE) + eventualne
+    dodatne vrednosti koje se pojave u sheetu."""
+    tipovi = list(ROTOR_TIPOVI)
+    if df_ch is not None and not df_ch.empty:
+        for col in ("CAVITY_1", "CAVITY_2"):
+            if col in df_ch.columns:
+                for v in df_ch[col].dropna().astype(str):
+                    v = v.strip().upper()
+                    if v and v.lower() not in ("nan", "none") and v not in tipovi:
+                        tipovi.append(v)
+    return tipovi
+
+
+def uskladi_alat_sa_listom(naziv: str, lista: list) -> str:
+    """Naziv alata iz Forme svodi na naziv iz liste alata programa (ignoriše razmake/znakove)."""
+    naziv = normalize_tool_name(naziv)
+    if not naziv:
+        return ""
+    for kljuc_fn in (compact_tool_key, tool_code_key, tool_mold_key):
+        k = kljuc_fn(naziv)
+        if not k:
+            continue
+        for kand in lista:
+            if kljuc_fn(kand) == k:
+                return kand
+    return naziv
+
+
+def efektivne_lokacije(sacuvano: dict, ch_df: pd.DataFrame, lista: list, masine: list) -> dict:
+    """Koji alat je u kojoj mašini. Noviji od dva izvora pobeđuje:
+    ručni izbor u programu (lokacije_alata.json) ili poslednji changeover unos iz Google Forme."""
+    ch_poslednji = {}
+    if ch_df is not None and not ch_df.empty:
+        for m, grp in ch_df.groupby("MASINA"):
+            grp = grp[grp["ALAT"].astype(str).str.strip() != ""]
+            if grp.empty:
+                continue
+            r = grp.sort_values("TIMESTAMP", ascending=True, na_position="first").iloc[-1]
+            ch_poslednji[str(m)] = (r["TIMESTAMP"], str(r["ALAT"]))
+    rez = {}
+    for m in masine:
+        man = sacuvano.get(m, {}) or {}
+        man_alat = str(man.get("alat") or "")
+        man_ts = pd.to_datetime(man.get("datum"), format="%d.%m.%Y %H:%M", errors="coerce")
+        ch = ch_poslednji.get(m)
+        koristi_formu = False
+        if ch is not None:
+            ch_ts = ch[0]
+            if not man.get("datum"):
+                koristi_formu = True
+            elif pd.notna(man_ts) and pd.notna(ch_ts) and ch_ts > man_ts:
+                koristi_formu = True
+        if koristi_formu:
+            rez[m] = {"alat": uskladi_alat_sa_listom(ch[1], lista), "izvor": "Changeover forma",
+                      "datum": ch[0].strftime("%d.%m.%Y %H:%M") if pd.notna(ch[0]) else ""}
+        else:
+            rez[m] = {"alat": man_alat, "izvor": "Ručno u programu" if man_alat else "", "datum": str(man.get("datum") or "")}
+    return rez
+
+
 def get_apps_script_url():
     try:
         secret_url = st.secrets.get("APPS_SCRIPT_URL", "")
@@ -3512,7 +4523,7 @@ def mesec_iz_datuma(datum):
 # =========================================================
 # SADRŽAJ IZABRANOG MODULA
 # =========================================================
-if selected_page == '🖥️ TV Panel':
+if requested_page == 'tv-panel':
     c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
     with c1: kpi_card("Ukupno kvarova", f"{ukupno_kvarova}", "Izabrani period")
     with c2: kpi_card("Ukupno zastoja", f"{ukupno_zastoj:.0f} min", f"{ukupno_zastoj/60:.1f} h")
@@ -3585,7 +4596,7 @@ if selected_page == '🖥️ TV Panel':
             st.info("Nema kvarova za izabrani period.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-if selected_page == '🧰 Kvarovi':
+if requested_page == 'kvarovi':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Kanban kvarova")
     st.caption("Ako u tabeli kvarova dodaš kolonu STATUS, kartice se automatski raspoređuju. Za stare podatke, bez statusa, prikazuje se 'Završeno'.")
@@ -3730,7 +4741,7 @@ if selected_page == '🧰 Kvarovi':
         [data-testid="stToolbar"] { top:9px !important; z-index:100002 !important; }
         [data-testid="stMainBlockContainer"], .block-container { padding:0 12px 22px !important; }
         .custom-left-nav { width:240px !important; background:#0f1419 !important; border-right:1px solid #404752 !important; }
-        [data-testid="stAppViewContainer"] { padding-left:240px !important; }
+        [data-testid="stAppViewContainer"] { padding-left:0 !important; }
         .custom-nav-brand { min-height:80px !important; padding:12px 14px 10px !important; }
         .custom-nav-logo { width:128px !important; max-height:30px !important; margin-bottom:7px !important; }
         .custom-nav-brand-title { font-size:15px !important; }
@@ -3783,7 +4794,7 @@ if selected_page == '🧰 Kvarovi':
     show_dark_dataframe(kvarovi_f, width="stretch", height=520)
     st.markdown('</div>', unsafe_allow_html=True)
 
-if selected_page == '📊 MTTR / MTBF':
+if requested_page == 'mttr-mtbf':
     # Vreme rada (opening time) po alatu i ukupno, iz broja smena × 410 min.
     operating_po_alatu, operating_min_ukupno = izracunaj_operating_minute(udarci_dnevno, period, izabrani_alati)
     mtbf_min_global = (operating_min_ukupno / ukupno_kvarova) if ukupno_kvarova else 0.0
@@ -3811,7 +4822,7 @@ if selected_page == '📊 MTTR / MTBF':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Target vs realno stanje")
     st.caption("MTTR target = 3 h (180 min), MTBF target = 6 h. Zeleno = bolje od targeta, narandžasto = lošije, plavo = target.")
-    T_ZELENA, T_NARANDZASTA, T_PLAVA = "#3ed598", "#f5a623", "#4fa8f5"
+    T_ZELENA, T_NARANDZASTA, T_PLAVA = "#3dff9a", "#ffb020", "#00e5ff"
     MTTR_TARGET_MIN = 3 * 60
     MTBF_TARGET_SATI = 6
     tc1, tc2 = st.columns(2)
@@ -3872,7 +4883,7 @@ if selected_page == '📊 MTTR / MTBF':
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-if selected_page == '🔧 Preventivno':
+if requested_page == 'preventivno':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Preventivno održavanje")
     st.caption("Računa se iz taba Total punch, a alate sa 0 udaraca dopunjava iz mesečnih tabova. Pravila: 0–20% života alata na 2.500.000 udaraca, 20–80% na 2.000.000, 80–100% na 1.500.000. Životni vek alata je 150.000.000 udaraca.")
@@ -3924,20 +4935,20 @@ if selected_page == '🔧 Preventivno':
                 status = str(row.get("STATUS_PREVENTIVE", ""))
                 border = "#3ed598" if "OK" in status else ("#f5b942" if "Blizu" in status else ("#f2607a" if "Za preventivu" in status else "#8a96ab"))
                 card_html = f"""
-                <div style='background:rgba(19,29,46,.82); border:1px solid rgba(126,170,224,0.22); border-left:3px solid {border}; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 6px 20px rgba(0,0,0,.28);'>
-                    <div style='font-family:"Space Grotesk","Inter",sans-serif; font-size:18px; font-weight:700; color:#f4f8fd;'>{html.escape(str(row['ALAT']))}</div>
-                    <div style='font-size:13px; font-weight:700; color:{border}; margin-top:3px; text-transform:uppercase; letter-spacing:.3px;'>{html.escape(status)}</div>
-                    <div style='display:grid; grid-template-columns: repeat(4, minmax(160px,1fr)); gap:10px; margin-top:12px; color:#c3d0e3; font-size:13px;'>
-                        <div><b style="color:#93a1b8;">Lifetime</b><br>{float(row['LIFETIME_UDARCI']):,.0f}</div>
-                        <div><b style="color:#93a1b8;">Zona života</b><br>{html.escape(str(row['ZONA_ZIVOTA']))} ({float(row['PROCENAT_ZIVOTA']):.1f}%)</div>
-                        <div><b style="color:#93a1b8;">Interval</b><br>{float(row['INTERVAL_PREVENTIVE']):,.0f}</div>
-                        <div><b style="color:#93a1b8;">Od preventive</b><br>{float(row['UDARCI_OD_PREVENTIVE']):,.0f}</div>
-                        <div><b style="color:#93a1b8;">Ostalo</b><br>{float(row['OSTALO_DO_PREVENTIVE']):,.0f}</div>
-                        <div><b style="color:#93a1b8;">Prekoračenje</b><br>{float(row['PREKORACENJE']):,.0f}</div>
-                        <div><b style="color:#93a1b8;">Poslednja preventiva</b><br>{html.escape(str(row['POSLEDNJA_PREVENTIVA_DATUM']))}</div>
-                        <div><b style="color:#93a1b8;">Udarci tada</b><br>{float(row['POSLEDNJA_PREVENTIVA_UDARCI']):,.0f}</div>
+                <div class="tool-status-card" style='background:linear-gradient(145deg,rgba(30,18,50,.92),rgba(12,28,48,.95)); border:1px solid rgba(167,139,250,0.35); border-left:3px solid {border}; border-radius:10px; padding:11px 12px; margin-bottom:9px; box-shadow:0 0 16px rgba(124,92,255,0.18), inset 0 1px 0 rgba(255,255,255,0.08);'>
+                    <div style='font-family:"Space Grotesk","Inter",sans-serif; font-size:15px; font-weight:700; color:#f4f8fd; text-shadow:0 0 8px rgba(167,139,250,0.35);'>{html.escape(str(row['ALAT']))}</div>
+                    <div style='font-size:11px; font-weight:700; color:{border}; margin-top:2px; text-transform:uppercase; letter-spacing:.3px; text-shadow:0 0 6px {border};'>{html.escape(status)}</div>
+                    <div style='display:grid; grid-template-columns: repeat(4, minmax(140px,1fr)); gap:8px; margin-top:9px; color:#c3d0e3; font-size:11.5px;'>
+                        <div><b style="color:#9ad4ff;">Lifetime</b><br>{float(row['LIFETIME_UDARCI']):,.0f}</div>
+                        <div><b style="color:#9ad4ff;">Zona života</b><br>{html.escape(str(row['ZONA_ZIVOTA']))} ({float(row['PROCENAT_ZIVOTA']):.1f}%)</div>
+                        <div><b style="color:#9ad4ff;">Interval</b><br>{float(row['INTERVAL_PREVENTIVE']):,.0f}</div>
+                        <div><b style="color:#9ad4ff;">Od preventive</b><br>{float(row['UDARCI_OD_PREVENTIVE']):,.0f}</div>
+                        <div><b style="color:#9ad4ff;">Ostalo</b><br>{float(row['OSTALO_DO_PREVENTIVE']):,.0f}</div>
+                        <div><b style="color:#9ad4ff;">Prekoračenje</b><br>{float(row['PREKORACENJE']):,.0f}</div>
+                        <div><b style="color:#9ad4ff;">Poslednja preventiva</b><br>{html.escape(str(row['POSLEDNJA_PREVENTIVA_DATUM']))}</div>
+                        <div><b style="color:#9ad4ff;">Udarci tada</b><br>{float(row['POSLEDNJA_PREVENTIVA_UDARCI']):,.0f}</div>
                     </div>
-                    <div style='margin-top:10px; color:#93a1b8; font-size:12.5px;'>{html.escape(str(row.get('OPIS_POSLEDNJE','')))}</div>
+                    <div style='margin-top:8px; color:#9ca7b5; font-size:11px;'>{html.escape(str(row.get('OPIS_POSLEDNJE','')))}</div>
                 </div>
                 """
                 st.markdown(card_html, unsafe_allow_html=True)
@@ -4009,7 +5020,7 @@ if selected_page == '🔧 Preventivno':
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-if selected_page == '🔮 Prediktivno':
+if requested_page == 'prediktivno':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Prediktivno održavanje")
     st.caption(
@@ -4044,17 +5055,19 @@ if selected_page == '🔮 Prediktivno':
             primer = html.escape(str(r["PRIMER_OPISA"])) if r["PRIMER_OPISA"] else ""
             primer_html = f'<div style="margin-top:8px;color:#9ca7b5;font:400 11px/16px Inter,sans-serif">„{primer}"</div>' if primer else ""
             kartice.append(
-                f'<div style="margin-bottom:10px;padding:13px 15px;background:#141a22;'
-                f'border:1px solid #333b46;border-left:4px solid {akcenat};border-radius:5px">'
+                f'<div class="tool-status-card" style="margin-bottom:8px;padding:10px 12px;'
+                f'background:linear-gradient(145deg,rgba(30,18,50,.92),rgba(12,28,48,.95));'
+                f'border:1px solid rgba(167,139,250,0.3);border-left:3px solid {akcenat};border-radius:10px;'
+                f'box-shadow:0 0 14px rgba(124,92,255,0.15)">'
                 f'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
-                f'<b style="color:#e8ecf3;font:600 14px Inter,sans-serif">{html.escape(str(r["ALAT"]))}</b>'
-                f'<span style="color:{akcenat};font:700 11px \'JetBrains Mono\',monospace">{html.escape(str(r["STATUS"]))}</span>'
+                f'<b style="color:#f0f7ff;font:600 13px Inter,sans-serif;text-shadow:0 0 8px rgba(167,139,250,0.35)">{html.escape(str(r["ALAT"]))}</b>'
+                f'<span style="color:{akcenat};font:700 10px \'JetBrains Mono\',monospace;text-shadow:0 0 6px {akcenat}">{html.escape(str(r["STATUS"]))}</span>'
                 f'</div>'
-                f'<div style="margin-top:5px;color:#c3d0e3;font:600 12px Inter,sans-serif">Kvar: {html.escape(str(r["KVAR"]))}'
+                f'<div style="margin-top:4px;color:#c3d0e3;font:600 11.5px Inter,sans-serif">Kvar: {html.escape(str(r["KVAR"]))}'
                 f' <span style="color:#89919d;font-weight:400">· ponovljen {int(r["BROJ_PONAVLJANJA"])}×</span></div>'
-                f'<div style="margin-top:7px;color:#dfe6f0;font:500 13px \'JetBrains Mono\',monospace">'
+                f'<div style="margin-top:5px;color:#dfe6f0;font:500 12px \'JetBrains Mono\',monospace">'
                 f'⌀ na svakih <b style="color:{akcenat}">{int(r["PROSECAN_INTERVAL"]):,}</b> udaraca</div>'
-                f'<div style="margin-top:5px;color:#9ca7b5;font:400 11px \'JetBrains Mono\',monospace">'
+                f'<div style="margin-top:4px;color:#9ca7b5;font:400 10.5px \'JetBrains Mono\',monospace">'
                 f'Od poslednjeg ({html.escape(str(r["POSLEDNJI_DATUM"]))}): {int(r["UDARCI_OD_POSLEDNJEG"]):,} · '
                 f'do očekivanog: {int(r["OSTALO_DO_OCEKIVANOG"]):,}</div>'
                 f'{primer_html}'
@@ -4073,7 +5086,7 @@ if selected_page == '🔮 Prediktivno':
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-if selected_page == '🚨 Kritični alati':
+if requested_page == 'kriticni-alati':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Kritični alati - mapa rizika")
     st.caption("Veličina kruga pokazuje ukupno trajanje zastoja. Naziv alata je prikazan pored kruga, a detalji se vide kada pređeš kursorom.")
@@ -4161,7 +5174,7 @@ if selected_page == '🚨 Kritični alati':
         st.info("Nema kvarova u izabranom periodu.")
     st.markdown('</div>', unsafe_allow_html=True)
 
-if selected_page == '📦 Rezervni delovi':
+if requested_page == 'rezervni-delovi':
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1: kpi_card("Redova u bazi", f"{len(delovi)}", "Svaka lokacija posebno")
     with c2: kpi_card("Grupisanih delova", f"{len(grupisani_delovi)}", "Po ID dela ili nazivu")
@@ -4245,7 +5258,7 @@ if selected_page == '📦 Rezervni delovi':
     with st.expander("Detaljan prikaz - svaka lokacija posebno"):
         show_dark_dataframe(delovi, width="stretch", height=500)
 
-if selected_page == '🗂️ Akcije':
+if requested_page == 'akcije':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Akcije")
 
@@ -4355,7 +5368,289 @@ if selected_page == '🗂️ Akcije':
             st.markdown('<div class="system-status-footer"><span><i></i> SISTEM AKTIVAN</span><span>AKCIJE SE ČITAJU IZ GOOGLE SHEETS TABA AKCIJE / AKCIONI PLAN</span></div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-if selected_page == '📝 Unos udaraca':
+if requested_page == 'lokacija-alata':
+    LOK_PRAZNO = "— Prazno —"
+    CAV_PRAZNO = "— nije uneto —"
+    sacuvano_lok = load_lokacije()
+    masine_lista = [f"AIDA {i}" for i in range(1, BROJ_MASINA + 1)]
+
+    # Changeover (tip rotora Cavity 1 / 2) iz Google Form taba
+    changeover_greska = ""
+    try:
+        changeover_df = ucitaj_changeover()
+    except Exception as exc:
+        changeover_df = pd.DataFrame()
+        changeover_greska = str(exc)
+    ch_overrides = load_changeover_overrides()
+    ch_po_masini = changeover_po_masini(changeover_df, ch_overrides)
+    tipovi_rotora = lista_tipova_rotora(changeover_df)
+    # Ako sheet još nema vrednosti, ostavi praznu listu — korisnik može upisati preko Forms
+
+    # Fajl je izvor istine: stanje widgeta se pri svakom renderu uskladi sa njim,
+    # pa više korisnika / TV ekran uvek vide isto stanje.
+    efektivno = efektivne_lokacije(sacuvano_lok, changeover_df, lista_alata, masine_lista)
+    for _m in masine_lista:
+        st.session_state[f"lok_{_m}"] = efektivno[_m]["alat"] or LOK_PRAZNO
+
+    def _lok_promena(masina):
+        izbor = st.session_state.get(f"lok_{masina}", LOK_PRAZNO)
+        alat_novi = "" if izbor == LOK_PRAZNO else izbor
+        if not save_lokacija(masina, alat_novi):
+            st.session_state["lok_greska"] = f"Nije moguće sačuvati izmenu za {masina}."
+        else:
+            st.session_state.pop("lok_greska", None)
+
+    def _cav_sacuvaj(masina):
+        c1 = st.session_state.get(f"cav1_{masina}", CAV_PRAZNO)
+        c2 = st.session_state.get(f"cav2_{masina}", CAV_PRAZNO)
+        c1 = "" if c1 == CAV_PRAZNO else c1
+        c2 = "" if c2 == CAV_PRAZNO else c2
+        # Dozvoli i ručno upisan tekst (selectbox može imati custom)
+        if save_changeover_override(masina, c1, c2):
+            st.session_state.pop("lok_greska", None)
+        else:
+            st.session_state["lok_greska"] = f"Nije moguće sačuvati tip rotora za {masina}."
+
+    postavljeni = {m: (efektivno[m]["alat"] or "") for m in masine_lista}
+    brojac_alata = {}
+    for _a in postavljeni.values():
+        if _a:
+            brojac_alata[_a] = brojac_alata.get(_a, 0) + 1
+    duplikati = {a for a, n in brojac_alata.items() if n > 1}
+    status_prev_map = dict(zip(preventiva_status["ALAT"], preventiva_status["STATUS_PREVENTIVE"])) if not preventiva_status.empty else {}
+
+    zauzeto = sum(1 for a in postavljeni.values() if a)
+    prazno = BROJ_MASINA - zauzeto
+
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.subheader("Lokacija alata na AIDA mašinama")
+    st.caption(
+        "Alat i tip rotora (Cavity 1 / Cavity 2) se automatski povlače iz Google Form taba "
+        f"**{SHEET_CHANGEOVER}** (osvežava se na ~1 min). Ručna izmena u programu važi dok ne stigne noviji Form unos."
+    )
+    if st.session_state.get("lok_greska"):
+        st.error(st.session_state["lok_greska"])
+
+    k1, k2, k3, k4 = st.columns(4)
+    with k1:
+        kpi_card("Mašina", f"{BROJ_MASINA}", "AIDA 1 – AIDA 12")
+    with k2:
+        kpi_card("Zauzeto", f"{zauzeto}", "Alat u mašini")
+    with k3:
+        kpi_card("Slobodno", f"{prazno}", "Prazne mašine")
+    with k4:
+        kpi_card("Changeover zapisa", f"{len(changeover_df)}", "U Google Sheetu")
+
+    if not changeover_df.empty and changeover_df["TIMESTAMP"].notna().any():
+        poslednji = changeover_df.dropna(subset=["TIMESTAMP"]).sort_values("TIMESTAMP").iloc[-1]
+        st.caption(
+            f"Poslednji Form unos: {poslednji['TIMESTAMP'].strftime('%d.%m.%Y %H:%M') if pd.notna(poslednji['TIMESTAMP']) else '—'} "
+            f"| {poslednji.get('MASINA','')} | Cavity 1={poslednji.get('CAVITY_1','')} / Cavity 2={poslednji.get('CAVITY_2','')} "
+            f"| {poslednji.get('UNOSIO','')}"
+        )
+    elif changeover_greska:
+        st.error(f"Ne mogu da učitam tab **{SHEET_CHANGEOVER}**: {changeover_greska}")
+    else:
+        st.info(f"Tab **{SHEET_CHANGEOVER}** je učitan, ali još nema unosa.")
+
+    # ---- Kartice projekata: koliko alata svakog projekta je trenutno u mašinama ----
+    # (zadržano ponašanje: grupisanje po prefiksu projekta iz naziva alata)
+    projekti_count = {}
+    for _a in postavljeni.values():
+        if not _a:
+            continue
+        pref = str(_a).split("-")[0].split(" ")[0].strip() or _a
+        projekti_count[pref] = projekti_count.get(pref, 0) + 1
+    if projekti_count:
+        st.markdown(
+            '<div class="filter-summary-bar">'
+            + "".join(
+                f'<span class="filter-summary-item">{html.escape(k)}: <b>{v}</b></span>'
+                for k, v in sorted(projekti_count.items())
+            )
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+    if duplikati:
+        st.warning("Isti alat je upisan u više mašina: " + ", ".join(sorted(duplikati)))
+
+    svi_alati_opcije = sorted(set(lista_alata) | {a for a in postavljeni.values() if a})
+    # Opcije za cavity: postojeći tipovi + trenutne vrednosti (da se ne izgube)
+    cav_opcije_base = list(tipovi_rotora)
+
+    def _lok_kartica(masina):
+        alat = postavljeni.get(masina, "")
+        datum = efektivno.get(masina, {}).get("datum", "")
+        ch = ch_po_masini.get(masina, {})
+        c1 = ch.get("cavity_1", "")
+        c2 = ch.get("cavity_2", "")
+        ch_meta = ""
+        if c1 or c2:
+            izvor = ch.get("izvor", "")
+            unosio = ch.get("unosio", "")
+            ch_dat = ch.get("datum", "")
+            delovi_meta = [x for x in [izvor, unosio, ch_dat] if x]
+            ch_meta = " · ".join(delovi_meta)
+
+        if alat in duplikati:
+            chip_txt, chip_col = "⚠ DUPLIKAT", "#ffb020"
+        elif alat:
+            ps = status_prev_map.get(alat, "")
+            chip_txt = ps.split(" ", 1)[1].upper() if ps else "U MAŠINI"
+            chip_col = STATUS_COLOR_MAP.get(ps, "#67e8f9")
+        else:
+            chip_txt, chip_col = "SLOBODNA", "#89919d"
+
+        if alat:
+            cav_html = (
+                f'<div class="lok-cavity">'
+                f'<span class="cav-pill"><b>Cavity 1</b> <span class="cav-val">{html.escape(c1) if c1 else "—"}</span></span>'
+                f'<span class="cav-pill"><b>Cavity 2</b> <span class="cav-val">{html.escape(c2) if c2 else "—"}</span></span>'
+                f'</div>'
+            )
+            meta_line = f'<div class="lok-meta">{"Postavljeno: " + html.escape(datum) if datum else ""}'
+            if ch_meta:
+                meta_line += f' &nbsp;|&nbsp; Rotor: {html.escape(ch_meta)}'
+            meta_line += '</div>'
+            centar = (
+                f'<div class="lok-center busy"><div class="lok-tool">{html.escape(alat)}</div>'
+                f'{cav_html}{meta_line}</div>'
+            )
+        else:
+            cav_html = (
+                f'<div class="lok-cavity">'
+                f'<span class="cav-pill"><b>Cavity 1</b> <span class="cav-val">{html.escape(c1) if c1 else "—"}</span></span>'
+                f'<span class="cav-pill"><b>Cavity 2</b> <span class="cav-val">{html.escape(c2) if c2 else "—"}</span></span>'
+                f'</div>'
+            )
+            meta_line = ""
+            if ch_meta:
+                meta_line = f'<div class="lok-meta">Rotor: {html.escape(ch_meta)}</div>'
+            centar = f'<div class="lok-center"><div class="lok-empty">— MAŠINA JE PRAZNA —</div>{cav_html}{meta_line}</div>'
+
+        # Opcije: fiksna lista tipova + trenutne vrednosti (da se nijedna ne izgubi)
+        cav_opts = [CAV_PRAZNO] + list(cav_opcije_base)
+        for _v in (c1, c2):
+            if _v and _v not in cav_opts:
+                cav_opts.append(_v)
+        # Kad se promeni izvor (novi Form unos ili sačuvana izmena), padajući meniji se
+        # vraćaju na stvarno stanje; dok se izvor ne menja, ručni izbor ostaje.
+        potpis = f"{ch.get('timestamp','')}|{c1}|{c2}"
+        if st.session_state.get(f"cavsig_{masina}") != potpis:
+            st.session_state[f"cavsig_{masina}"] = potpis
+            st.session_state[f"cav1_{masina}"] = c1 if c1 else CAV_PRAZNO
+            st.session_state[f"cav2_{masina}"] = c2 if c2 else CAV_PRAZNO
+
+        with st.container(key=f"lokkartica_{masina.replace(' ', '_')}"):
+            st.markdown(
+                f'<div class="lok-head"><span class="lok-name">▣ {html.escape(masina)}</span>'
+                f'<span class="lok-chip" style="color:{chip_col}">{html.escape(chip_txt)}</span></div>{centar}',
+                unsafe_allow_html=True,
+            )
+            st.selectbox(
+                "Zameni alat",
+                [LOK_PRAZNO] + svi_alati_opcije,
+                key=f"lok_{masina}",
+                on_change=_lok_promena,
+                args=(masina,),
+            )
+            cc1, cc2, cc3 = st.columns([1.2, 1.2, 0.8])
+            with cc1:
+                st.selectbox(
+                    "Cavity 1",
+                    options=cav_opts,
+                    key=f"cav1_{masina}",
+                )
+            with cc2:
+                st.selectbox(
+                    "Cavity 2",
+                    options=cav_opts,
+                    key=f"cav2_{masina}",
+                )
+            with cc3:
+                st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+                if st.button("Sačuvaj rotor", key=f"cavsave_{masina}", width="stretch"):
+                    _cav_sacuvaj(masina)
+                    st.rerun()
+
+    st.markdown(
+        """
+        <style>
+        div[class*="st-key-lokkartica_"] {
+            background: linear-gradient(160deg, rgba(22, 34, 52, 0.95), rgba(14, 20, 34, 0.92)) !important;
+            border: 1px solid rgba(103, 232, 249, 0.28) !important;
+            border-radius: 14px !important;
+            padding: 18px 20px 16px 20px !important;
+            margin-bottom: 20px !important;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.32) !important;
+        }
+        .lok-cavity {
+            display: flex; flex-wrap: wrap; gap: 10px 14px;
+            margin-top: 12px;
+        }
+        .lok-cavity .cav-pill {
+            display: inline-flex; align-items: center; gap: 10px;
+            padding: 9px 18px;
+            border-radius: 10px;
+            background: rgba(255, 216, 77, 0.10);
+            border: 1px solid rgba(255, 216, 77, 0.55);
+            font-size: 14px;
+            color: #e8f0ff;
+        }
+        .lok-cavity .cav-pill b { color: #67e8f9; font-weight: 700; font-size: 14px; letter-spacing: .3px; }
+        .lok-cavity .cav-pill .cav-val {
+            color: #ffd84d; font-size: 26px; font-weight: 800; line-height: 1;
+            font-family: 'JetBrains Mono', monospace; text-shadow: 0 0 10px rgba(255,216,77,.35);
+        }
+        .lok-tool { font-size: 17px !important; }
+        .lok-cavity .cav-empty {
+            color: #89919d;
+            font-size: 12px;
+            font-style: italic;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown('<div style="height:22px"></div>', unsafe_allow_html=True)
+    kolona_l, kolona_d = st.columns(2, gap="medium")
+    with kolona_l:
+        for _m in masine_lista[:BROJ_MASINA // 2]:
+            _lok_kartica(_m)
+    with kolona_d:
+        for _m in masine_lista[BROJ_MASINA // 2:]:
+            _lok_kartica(_m)
+
+    with st.expander("Tabelarni pregled svih mašina"):
+        pregled_lok = pd.DataFrame([
+            {
+                "Mašina": m,
+                "Alat": postavljeni[m] or "—",
+                "Postavljeno": sacuvano_lok.get(m, {}).get("datum", ""),
+                "Cavity 1": ch_po_masini.get(m, {}).get("cavity_1", ""),
+                "Cavity 2": ch_po_masini.get(m, {}).get("cavity_2", ""),
+                "Changeover": ch_po_masini.get(m, {}).get("datum", ""),
+                "Unosio": ch_po_masini.get(m, {}).get("unosio", ""),
+                "Izvor": ch_po_masini.get(m, {}).get("izvor", ""),
+                "Status preventive": status_prev_map.get(postavljeni[m], "") if postavljeni[m] else "",
+            }
+            for m in masine_lista
+        ])
+        show_dark_dataframe(pregled_lok, width="stretch")
+
+    with st.expander("Sirovi changeover podaci (Google Sheet)"):
+        if changeover_df.empty:
+            st.info("Nema podataka.")
+        else:
+            show_dark_dataframe(changeover_df.sort_values("TIMESTAMP", ascending=False), width="stretch", height=320)
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+
+if requested_page == 'unos-udaraca':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Unos udaraca u Google Sheets")
     st.caption("Unos je napravljen za više unosa dnevno. Ako ćelija već ima vrednost, program prikazuje postojeću vrednost i pita da li želiš da sabereš ili zameniš.")
@@ -4513,7 +5808,7 @@ if selected_page == '📝 Unos udaraca':
 
 
 
-if selected_page == '📈 Udarci po periodu':
+if requested_page == 'udarci-period':
     st.markdown("""
         <div class="module-command-bar">
             <div class="command-tabs"><span class="command-tab active">▣ Pregled udaraca</span></div>
@@ -4638,7 +5933,7 @@ if selected_page == '📈 Udarci po periodu':
         st.markdown('</div>', unsafe_allow_html=True)
 
 
-if selected_page == '📚 Dokumentacija':
+if requested_page == 'dokumentacija':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Dokumentacija / Procedure")
     st.caption("Učitava tab DOKUMENTACIJA iz Google Sheets tabele rezervnih delova. Word dokumenti se otvaraju preko Google Drive linka.")
@@ -4728,7 +6023,7 @@ if selected_page == '📚 Dokumentacija':
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-if selected_page == '🤖 AI analiza':
+if requested_page == 'ai-analiza':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Priprema podataka za ChatGPT analizu")
     st.caption("Prva verzija ne šalje ništa automatski. Kopiraš tekst i pošalješ meni u chat.")
@@ -4795,7 +6090,7 @@ ZADATAK:
     st.text_area("Tekst za slanje u ChatGPT", value=ai_text, height=520)
     st.markdown('</div>', unsafe_allow_html=True)
 
-if selected_page == '🗄️ Sirovi podaci':
+if requested_page == 'sirovi-podaci':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Kvarovi - sirovi podaci")
     show_dark_dataframe(kvarovi, width="stretch", height=360)
