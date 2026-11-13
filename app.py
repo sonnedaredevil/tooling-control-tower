@@ -2494,6 +2494,10 @@ def plotly_layout(fig, height=None):
     return fig
 
 
+TIP_MASINA = "Kvar na mašini"
+TIP_ALATNICA = "Popravka u alatnici"
+
+
 def klasifikuj_kvar(opis):
     # Tekst se najpre očisti od dijakritika (š→s, č/ć→c, ž→z) i đ→dj, pa se poredi
     # sa ključnim rečima bez kvačica. Tako "nož", "noz", "kaiš", "kais" itd. rade isto.
@@ -3194,6 +3198,7 @@ def ucitaj_kvarove():
         "TRAJANJE_RAW": ["TRAJANJE", "TRAJANJE ZASTOJA", "TRAJANJE ZASTOJA MIN", "TRAJANJE KVARA", "VREME ZASTOJA"],
         "STATUS": ["STATUS", "STANJE"],
         "PRIORITET": ["PRIORITET", "HITNOST"],
+        "VRSTA_POPRAVKE": ["VRSTA POPRAVKE", "VRSTA_POPRAVKE", "TIP POPRAVKE"],
     }
     for standard, candidates in mappings.items():
         col = find_col(df, candidates)
@@ -3218,6 +3223,14 @@ def ucitaj_kvarove():
     df["STATUS_KANBAN"] = df["STATUS"].apply(normalizuj_status_kvara)
     if "PRIORITET" not in df.columns:
         df["PRIORITET"] = "Normalno"
+    # Vrsta popravke iz Google Forme: "Kvar na mašini" ili "Popravka u alatnici".
+    # Stari unosi (bez odgovora) i sve što nije alatnica vode se kao kvar na mašini.
+    if "VRSTA_POPRAVKE" not in df.columns:
+        df["VRSTA_POPRAVKE"] = ""
+    df["VRSTA_POPRAVKE"] = df["VRSTA_POPRAVKE"].astype(str).replace(["nan", "None", "NaT"], "").str.strip()
+    df["TIP_POPRAVKE"] = df["VRSTA_POPRAVKE"].apply(
+        lambda v: TIP_ALATNICA if "alatnic" in strip_accents(v) else TIP_MASINA
+    )
     return df
 
 
@@ -4156,6 +4169,18 @@ if period and isinstance(period, tuple) and len(period) == 2 and "DATUM" in kvar
     date_to = pd.to_datetime(period[1]) + pd.Timedelta(days=1)
     kvarovi_f = kvarovi_f[(kvarovi_f["DATUM"] >= date_from) & (kvarovi_f["DATUM"] < date_to)]
 
+# kvarovi_sve_f = svi unosi (kvarovi na mašini + popravke u alatnici) za analize koje uzimaju oba tipa.
+# kvarovi_f = SAMO kvarovi na mašini -> ulaze u zastoje, MTTR, MTBF, availability.
+# popravke_alatnica_f = popravke u alatnici -> prikazuju se zasebno, ne ulaze u zastoje.
+kvarovi_sve_f = kvarovi_f.copy()
+if "TIP_POPRAVKE" in kvarovi_f.columns:
+    popravke_alatnica_f = kvarovi_f[kvarovi_f["TIP_POPRAVKE"] == TIP_ALATNICA].copy()
+    kvarovi_f = kvarovi_f[kvarovi_f["TIP_POPRAVKE"] != TIP_ALATNICA].copy()
+else:
+    popravke_alatnica_f = kvarovi_f.iloc[0:0].copy()
+alatnica_broj = len(popravke_alatnica_f)
+alatnica_min = float(popravke_alatnica_f["TRAJANJE"].sum()) if "TRAJANJE" in popravke_alatnica_f.columns and not popravke_alatnica_f.empty else 0.0
+
 ukupno_udarci = udarci_f.groupby("ALAT", as_index=False)["UDARCI"].sum().sort_values("UDARCI", ascending=False) if not udarci_f.empty else pd.DataFrame(columns=["ALAT", "UDARCI"])
 
 if not kvarovi_f.empty and "ALAT" in kvarovi_f.columns:
@@ -4748,9 +4773,9 @@ if requested_page == 'tv-panel':
     with bottom2:
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.subheader("Najčešće kategorije kvarova")
-        if not kvarovi_f.empty:
-            kat = kvarovi_f.groupby("KATEGORIJA", as_index=False).size().rename(columns={"size": "BROJ"}).sort_values("BROJ", ascending=False)
-            fig = px.bar(kat.head(10), x="KATEGORIJA", y="BROJ", text="BROJ", title="Pareto kategorija")
+        if not kvarovi_sve_f.empty:
+            kat = kvarovi_sve_f.groupby("KATEGORIJA", as_index=False).size().rename(columns={"size": "BROJ"}).sort_values("BROJ", ascending=False)
+            fig = px.bar(kat.head(10), x="KATEGORIJA", y="BROJ", text="BROJ", title="Pareto kategorija (kvarovi + popravke u alatnici)")
             st.plotly_chart(plotly_layout(fig, 430), width="stretch")
         else:
             st.info("Nema kvarova za izabrani period.")
@@ -4761,14 +4786,14 @@ if requested_page == 'kvarovi':
     st.subheader("Kanban kvarova")
     st.caption("Ako u tabeli kvarova dodaš kolonu STATUS, kartice se automatski raspoređuju. Za stare podatke, bez statusa, prikazuje se 'Završeno'.")
 
-    if "STATUS_KANBAN" not in kvarovi_f.columns and "STATUS" in kvarovi_f.columns:
-        kvarovi_f = kvarovi_f.copy()
-        kvarovi_f["STATUS_KANBAN"] = kvarovi_f["STATUS"].apply(normalizuj_status_kvara)
+    kvarovi_kanban = kvarovi_sve_f.copy()
+    if "STATUS_KANBAN" not in kvarovi_kanban.columns and "STATUS" in kvarovi_kanban.columns:
+        kvarovi_kanban["STATUS_KANBAN"] = kvarovi_kanban["STATUS"].apply(normalizuj_status_kvara)
 
     statuses = ["Prijavljeno", "U radu", "Čeka deo", "Čeka Kinu", "Ponovljen kvar", "Završeno"]
 
-    if not kvarovi_f.empty and "STATUS_KANBAN" in kvarovi_f.columns:
-        pregled_statusa = kvarovi_f.groupby("STATUS_KANBAN").size().reset_index(name="BROJ")
+    if not kvarovi_kanban.empty and "STATUS_KANBAN" in kvarovi_kanban.columns:
+        pregled_statusa = kvarovi_kanban.groupby("STATUS_KANBAN").size().reset_index(name="BROJ")
         st.caption("Prepoznati statusi: " + ", ".join([f"{r.STATUS_KANBAN}: {int(r.BROJ)}" for r in pregled_statusa.itertuples()]))
 
     # Važno: ceo Kanban renderujemo kao jedan HTML blok.
@@ -4787,9 +4812,9 @@ if requested_page == 'kvarovi':
 
     kanban_html = ['<div class="kanban-board">']
     for status in statuses:
-        if "STATUS_KANBAN" in kvarovi_f.columns and not kvarovi_f.empty:
-            data = kvarovi_f[kvarovi_f["STATUS_KANBAN"] == status].head(20)
-            count_status = int((kvarovi_f["STATUS_KANBAN"] == status).sum())
+        if "STATUS_KANBAN" in kvarovi_kanban.columns and not kvarovi_kanban.empty:
+            data = kvarovi_kanban[kvarovi_kanban["STATUS_KANBAN"] == status].head(20)
+            count_status = int((kvarovi_kanban["STATUS_KANBAN"] == status).sum())
         else:
             data = pd.DataFrame()
             count_status = 0
@@ -4803,6 +4828,8 @@ if requested_page == 'kvarovi':
             for card_idx, (_, row) in enumerate(data.iterrows()):
                 datum_txt = row["DATUM"].strftime("%d.%m.%Y") if "DATUM" in row and pd.notna(row["DATUM"]) else ""
                 alat_txt = html.escape(str(row.get("ALAT", "")))
+                if str(row.get("TIP_POPRAVKE", "")) == TIP_ALATNICA:
+                    alat_txt += ' <span style="color:#ffb77b;font-size:10px;font-weight:700">[ALATNICA]</span>'
                 kategorija_txt = html.escape(str(row.get("KATEGORIJA", "")))
                 problem_txt = html.escape(str(row.get("PROBLEM", ""))[:160])
                 raw_status = html.escape(str(row.get("STATUS", "")))
@@ -4951,7 +4978,29 @@ if requested_page == 'kvarovi':
 
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Tabela kvarova")
-    show_dark_dataframe(kvarovi_f, width="stretch", height=520)
+    st.caption("Kvarovi na mašini (ulaze u zastoje, MTTR i MTBF).")
+    show_dark_dataframe(kvarovi_f, width="stretch", height=420)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="section-card">', unsafe_allow_html=True)
+    st.subheader("Popravke u alatnici")
+    st.caption("Ne ulaze u zastoje, MTTR, MTBF ni availability. Uzimaju se u obzir u prediktivnom održavanju i analizi kategorija kvarova.")
+    pa1, pa2, pa3 = st.columns(3)
+    with pa1: kpi_card("Popravki u alatnici", f"{alatnica_broj}", "Izabrani period")
+    with pa2: kpi_card("Ukupno trajanje", f"{alatnica_min:.0f} min", f"{alatnica_min/60:.1f} h")
+    with pa3: kpi_card("Prosečno trajanje", f"{(alatnica_min/alatnica_broj if alatnica_broj else 0):.1f} min", "Po popravci")
+    if popravke_alatnica_f.empty:
+        st.info("Nema popravki u alatnici za izabrani period i alate.")
+    else:
+        po_alatu_al = popravke_alatnica_f.groupby("ALAT", as_index=False).agg(
+            BROJ=("ALAT", "count"), TRAJANJE_MIN=("TRAJANJE", "sum")
+        ).sort_values("TRAJANJE_MIN", ascending=False)
+        fig_al = px.bar(po_alatu_al.head(20), x="ALAT", y="TRAJANJE_MIN", text="TRAJANJE_MIN",
+                        title="Trajanje popravki u alatnici po alatu (min)")
+        fig_al.update_traces(texttemplate="%{text:.0f} min", textposition="outside")
+        st.plotly_chart(plotly_layout(fig_al, 420), width="stretch")
+        kol_al = [c for c in ["DATUM", "ALAT", "KATEGORIJA", "TRAJANJE", "PROBLEM", "RESENJE", "STATUS"] if c in popravke_alatnica_f.columns]
+        show_dark_dataframe(popravke_alatnica_f.sort_values("DATUM", ascending=False)[kol_al] if "DATUM" in kol_al else popravke_alatnica_f[kol_al], width="stretch", height=320)
     st.markdown('</div>', unsafe_allow_html=True)
 
 if requested_page == 'mttr-mtbf':
@@ -5290,12 +5339,12 @@ if requested_page == 'kriticni-alati':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("Top 3 kvara u izabranom periodu")
     st.caption("Rangirano prvo po broju ponavljanja, a kod istog broja po ukupnom trajanju zastoja. Levi stubić je broj ponavljanja, desni ukupan zastoj u minutima.")
-    if not kvarovi_f.empty and "KATEGORIJA" in kvarovi_f.columns:
-        top3 = kvarovi_f.groupby("KATEGORIJA", as_index=False).agg(
+    if not kvarovi_sve_f.empty and "KATEGORIJA" in kvarovi_sve_f.columns:
+        top3 = kvarovi_sve_f.groupby("KATEGORIJA", as_index=False).agg(
             BROJ=("KATEGORIJA", "count"),
-            ZASTOJ_MIN=("TRAJANJE", "sum") if "TRAJANJE" in kvarovi_f.columns else ("KATEGORIJA", "count"),
+            ZASTOJ_MIN=("TRAJANJE", "sum") if "TRAJANJE" in kvarovi_sve_f.columns else ("KATEGORIJA", "count"),
         )
-        if "TRAJANJE" not in kvarovi_f.columns:
+        if "TRAJANJE" not in kvarovi_sve_f.columns:
             top3["ZASTOJ_MIN"] = 0.0
         top3 = top3.sort_values(["BROJ", "ZASTOJ_MIN"], ascending=[False, False]).head(3)
 
@@ -6194,8 +6243,8 @@ if requested_page == 'ai-analiza':
             top_alati_txt += f"- {r['ALAT']}: kvarova {int(r['BROJ_KVAROVA'])}, zastoj {r['ZASTOJ_MIN']:.0f} min, kvarova/1M {r['KVAROVA_NA_1M_UDARACA']:.2f}, status {r['STATUS']}\n"
 
     top_kategorije_txt = ""
-    if not kvarovi_f.empty:
-        kat = kvarovi_f.groupby("KATEGORIJA", as_index=False).size().rename(columns={"size": "BROJ"}).sort_values("BROJ", ascending=False)
+    if not kvarovi_sve_f.empty:
+        kat = kvarovi_sve_f.groupby("KATEGORIJA", as_index=False).size().rename(columns={"size": "BROJ"}).sort_values("BROJ", ascending=False)
         for _, r in kat.head(10).iterrows():
             top_kategorije_txt += f"- {r['KATEGORIJA']}: {int(r['BROJ'])} slučajeva\n"
 
@@ -6227,6 +6276,7 @@ OSNOVNI KPI:
 - MTTR ukupno: {mttr_ukupno:.1f} min
 - Ukupno udaraca: {ukupno_udaraca}
 - Kritični alati: {kriticni_broj}
+- Popravki u alatnici (nisu u zastojima): {alatnica_broj}, ukupno {alatnica_min:.0f} min
 
 TOP ALATI:
 {top_alati_txt if top_alati_txt else '- Nema podataka'}
@@ -6252,7 +6302,7 @@ ZADATAK:
 
 if requested_page == 'sirovi-podaci':
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader("Kvarovi - sirovi podaci")
+    st.subheader("Kvarovi - sirovi podaci (sa kolonom VRSTA_POPRAVKE / TIP_POPRAVKE)")
     show_dark_dataframe(kvarovi, width="stretch", height=360)
     st.subheader("Udarci - mesečni zbirni podaci")
     show_dark_dataframe(udarci, width="stretch", height=360)
